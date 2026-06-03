@@ -3,22 +3,36 @@ name: release
 on:
   push:
     tags: ["[0-9]*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version being released (must match Cargo.toml)"
+        required: true
+        type: string
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Verify tag matches version
+        id: set-version
         run: |
-          tag_ver="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag_ver="${{ github.ref_name }}"
+          else
+            tag_ver="${{ inputs.version }}"
+          fi
           cargo_ver=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
           if [ "$tag_ver" != "$cargo_ver" ]; then
             echo "Tag $tag_ver does not match Cargo.toml $cargo_ver"
             exit 1
           fi
           echo "Releasing version $cargo_ver"
+          echo "version=$cargo_ver" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
         run: cargo test -p x940rs -p x940
@@ -28,6 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.verify.outputs.version }}
 
       - name: Publish x940rs
         env:
@@ -48,6 +64,8 @@ jobs:
         python-version: ["3.10"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.verify.outputs.version }}
 
       - uses: actions/setup-python@v5
         with:
