@@ -1,0 +1,62 @@
+name: release
+
+on:
+  push:
+    tags: ["[0-9]*"]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches version
+        run: |
+          tag_ver="${{ github.ref_name }}"
+          cargo_ver=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$tag_ver" != "$cargo_ver" ]; then
+            echo "Tag $tag_ver does not match Cargo.toml $cargo_ver"
+            exit 1
+          fi
+          echo "Releasing version $cargo_ver"
+
+      - name: Run tests
+        run: cargo test -p x940rs -p x940
+
+  publish-crates:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish x940rs
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p x940rs --token "$CARGO_REGISTRY_TOKEN"
+
+      - name: Publish x940 (CLI)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p x940 --token "$CARGO_REGISTRY_TOKEN"
+
+  publish-pypi:
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build and publish to PyPI
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: maturin publish -m crates/python/Cargo.toml --username __token__ --password "$PYPI_TOKEN"

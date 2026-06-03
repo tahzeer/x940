@@ -1,0 +1,47 @@
+name: check-format
+
+on:
+  pull_request:
+    branches: ["**"]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Doc check
+        run: RUSTDOCFLAGS="-D rustdoc::broken-intra-doc-links" cargo doc --no-deps --workspace
+
+      - name: Build check
+        run: cargo check --workspace
+
+      - name: Check version sync
+        run: |
+          cargo_ver=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          py_ver=$(grep '^version' crates/python/pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          node_ver=$(grep '"version"' crates/node/package.json | head -1 | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/')
+          if [ "$cargo_ver" != "$py_ver" ] || [ "$cargo_ver" != "$node_ver" ]; then
+            echo "Version mismatch: Cargo=$cargo_ver Python=$py_ver Node=$node_ver"
+            exit 1
+          fi
+          echo "All versions match: $cargo_ver"

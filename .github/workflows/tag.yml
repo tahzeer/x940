@@ -1,0 +1,51 @@
+name: tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. 0.1.0)"
+        required: true
+        type: string
+
+jobs:
+  verify-and-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Check versions match
+        run: |
+          TAG="${{ inputs.version }}"
+          CARGO_VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          PY_VER=$(grep '^version' crates/python/pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          NODE_VER=$(grep '"version"' crates/node/package.json | head -1 | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/')
+
+          echo "Tag:              $TAG"
+          echo "Cargo.toml:       $CARGO_VER"
+          echo "pyproject.toml:   $PY_VER"
+          echo "package.json:     $NODE_VER"
+
+          if [ "$TAG" != "$CARGO_VER" ]; then
+            echo "ERROR: tag $TAG != Cargo.toml $CARGO_VER"
+            exit 1
+          fi
+          if [ "$TAG" != "$PY_VER" ]; then
+            echo "ERROR: tag $TAG != pyproject.toml $PY_VER"
+            exit 1
+          fi
+          if [ "$TAG" != "$NODE_VER" ]; then
+            echo "ERROR: tag $TAG != package.json $NODE_VER"
+            exit 1
+          fi
+
+          echo "All 3 versions match $TAG. Creating tag."
+
+      - name: Create tag
+        run: |
+          git tag "${{ inputs.version }}"
+          git push origin "${{ inputs.version }}"

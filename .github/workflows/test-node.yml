@@ -1,0 +1,42 @@
+name: test-node
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: ["20", "22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-${{ matrix.node-version }}-cargo-node-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run Rust unit tests
+        run: cargo test -p x940node
+
+      - name: Install npm deps
+        run: npm install
+        working-directory: crates/node
+
+      - name: Run JS integration tests
+        run: npm test
+        working-directory: crates/node
