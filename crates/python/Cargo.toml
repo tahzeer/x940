@@ -1,0 +1,18 @@
+[package]
+name = "x940py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "x940 Python binding: native MT940 parser via PyO3"
+
+[lib]
+name = "x940"
+crate-type = ["cdylib"]
+
+[dependencies]
+x940rs = { path = "../core" }
+pyo3.workspace = true
+chrono.workspace = true
+rust_decimal.workspace = true
