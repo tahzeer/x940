@@ -25,7 +25,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install build deps
-        run: uv pip install maturin pytest
+        run: |
+          uv venv
+          uv pip install maturin pytest
 
       - name: Build Python binding
         run: uv run maturin develop -m crates/python/Cargo.toml

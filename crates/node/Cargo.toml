@@ -14,7 +14,6 @@ crate-type = ["cdylib"]
 x940rs = { path = "../core" }
 napi.workspace = true
 napi-derive.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 
 [build-dependencies]

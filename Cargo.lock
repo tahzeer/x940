@@ -929,8 +929,6 @@ dependencies = [
  "napi-derive",
  "napi-sys",
  "once_cell",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2204,7 +2202,6 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
- "serde",
  "serde_json",
  "x940rs",
 ]

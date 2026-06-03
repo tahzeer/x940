@@ -52,7 +52,7 @@ clap = { version = "4", features = ["derive"] }
 pyo3 = { version = "0.23", features = ["chrono"] }
 
 # Node.js binding
-napi = { version = "2", features = ["napi4", "serde-json"] }
+napi = { version = "2", features = ["napi4"] }
 napi-derive = "2"
 
 # Testing

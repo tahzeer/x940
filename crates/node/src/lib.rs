@@ -30,7 +30,7 @@ fn resolve_purpose(tx: &x940rs::Transaction) -> String {
     }
 }
 
-#[napi(object)]
+#[napi]
 pub struct Transaction {
     pub value_date: String,
     pub entry_date: Option<String>,
