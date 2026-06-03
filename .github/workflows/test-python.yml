@@ -17,16 +17,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: pip install maturin pytest
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install build deps
+        run: uv pip install maturin pytest
 
       - name: Build Python binding
-        run: maturin develop -m crates/python/Cargo.toml
+        run: uv run maturin develop -m crates/python/Cargo.toml
 
       - name: Run Python tests
-        run: pytest crates/python/tests/ -v
+        run: uv run pytest crates/python/tests/ -v
