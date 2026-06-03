@@ -2185,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "x940"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -2197,7 +2197,7 @@ dependencies = [
 
 [[package]]
 name = "x940node"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "napi",
  "napi-build",
@@ -2207,7 +2207,7 @@ dependencies = [
 
 [[package]]
 name = "x940py"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "pyo3",
@@ -2217,7 +2217,7 @@ dependencies = [
 
 [[package]]
 name = "x940rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "criterion",
