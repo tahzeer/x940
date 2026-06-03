@@ -62,16 +62,19 @@ const { MT940 } = require("../index.js");
 
     const t0 = s.transactions[0];
     assert(t0.structuredDetails !== null);
-    assert(t0.structuredDetails.detail !== undefined);
+    const sd0 = JSON.parse(t0.structuredDetails);
+    assert(sd0.detail !== undefined);
 
     const t1 = s.transactions[1];
     assert(t1.structuredDetails !== null);
-    assert.equal(t1.structuredDetails.EREF, "STRESS-881");
+    const sd1 = JSON.parse(t1.structuredDetails);
+    assert.equal(sd1.EREF, "STRESS-881");
     assert.equal(t1.counterparty, "ENTERPRISE HOLDINGS PLC");
 
     const t2 = s.transactions[2];
     assert(t2.structuredDetails !== null);
-    assert(t2.structuredDetails.detail !== undefined);
+    const sd2 = JSON.parse(t2.structuredDetails);
+    assert(sd2.detail !== undefined);
 }
 
 {

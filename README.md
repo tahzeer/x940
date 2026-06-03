@@ -45,15 +45,16 @@ cargo install --path crates/cli
 # Cargo.toml:  x940rs = { path = "/path/to/x940/crates/core" }
 
 # Python binding: install in dev mode
-pip install maturin
-maturin develop -m crates/python/Cargo.toml --release
+uv pip install maturin
+uv run maturin develop -m crates/python/Cargo.toml --release
+uv run pytest crates/python/tests/ -v
 
 # Node.js binding: build the native addon
 cd crates/node && npm install && napi build --platform --release
 
 # Run tests
 cargo test -p x940rs -p x940
-pytest crates/python/tests/ -v
+uv run pytest crates/python/tests/ -v
 cd crates/node && npm test
 
 # Lint

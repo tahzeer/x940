@@ -67,7 +67,7 @@ cargo fmt --check
 
 ```bash
 uv pip install maturin pytest
-maturin develop -m crates/python/Cargo.toml
+uv run maturin develop -m crates/python/Cargo.toml
 uv run pytest crates/python/tests/ -v
 ```
 

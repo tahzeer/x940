@@ -30,12 +30,6 @@ fn resolve_purpose(tx: &x940rs::Transaction) -> String {
     }
 }
 
-fn sd_to_json(sd: &std::collections::HashMap<String, String>) -> serde_json::Value {
-    let map: serde_json::map::Map<String, serde_json::Value> =
-        sd.iter().map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect();
-    serde_json::Value::Object(map)
-}
-
 #[napi(object)]
 pub struct Transaction {
     pub value_date: String,
@@ -47,7 +41,7 @@ pub struct Transaction {
     pub customer_reference: String,
     pub bank_reference: Option<String>,
     pub details: String,
-    pub structured_details: serde_json::Value,
+    pub structured_details: String,
     pub counterparty: String,
     pub counter_iban: String,
     pub purpose: String,
@@ -126,8 +120,12 @@ impl MT940 {
                     structured_details: tx
                         .structured_details
                         .as_ref()
-                        .map(sd_to_json)
-                        .unwrap_or(serde_json::Value::Null),
+                        .map(|sd| {
+                            let obj: std::collections::BTreeMap<_, _> =
+                                sd.iter().collect();
+                            serde_json::to_string(&obj).unwrap_or_default()
+                        })
+                        .unwrap_or_default(),
                     counterparty: tx
                         .structured_details
                         .as_ref()

@@ -28,8 +28,9 @@ RUSTDOCFLAGS="-D rustdoc::broken-intra-doc-links" cargo doc --no-deps --workspac
 cargo bench -p x940rs
 
 # Python binding (requires maturin + libpython3.12-dev)
-maturin develop -m crates/python/Cargo.toml --release
-pytest crates/python/tests/ -v
+uv pip install maturin
+uv run maturin develop -m crates/python/Cargo.toml --release
+uv run pytest crates/python/tests/ -v
 
 # Node.js binding (requires npm)
 cd crates/node && npm install && npm test

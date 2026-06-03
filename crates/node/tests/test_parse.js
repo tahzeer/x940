@@ -81,7 +81,8 @@ const PAYLOAD = ":20:TEST\r\n:25:ACCT\r\n:28C:1/1\r\n:60F:C240101EUR1000,00\r\n:
     const swift = ":20:TEST\r\n:25:ACCT\r\n:28C:1/1\r\n:60F:C240101EUR1000,00\r\n:61:2401012401D100,00NTRF\r\n:86:/EREF/INV-001/REMI/TEST/NAME/ACME CORP\r\n:62F:C240101EUR900,00\r\n";
     const s = new MT940(swift, "auto");
     const tx = s.transactions[0];
-    assert(tx.structuredDetails !== null);
+    const sd = JSON.parse(tx.structuredDetails);
+    assert(sd !== null);
     assert.equal(tx.counterparty, "ACME CORP");
     assert.equal(tx.purpose, "TEST");
 }
