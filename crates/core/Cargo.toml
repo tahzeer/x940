@@ -1,0 +1,30 @@
+[package]
+name = "x940rs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core MT940 bank statement parser: all business logic lives here"
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+rust_decimal.workspace = true
+pest.workspace = true
+pest_derive.workspace = true
+regex.workspace = true
+quick-xml.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+proptest.workspace = true
+rust_decimal_macros.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "parse_bench"
+harness = false
