@@ -1,0 +1,21 @@
+[package]
+name = "x940node"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "x940 Node.js binding: native MT940 parser via napi-rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+x940rs = { path = "../core" }
+napi.workspace = true
+napi-derive.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+napi-build = "2"

@@ -1,0 +1,17 @@
+{
+  "name": "x940",
+  "version": "0.1.0",
+  "main": "x940.linux-x64-gnu.node",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "x940",
+    "triples": {}
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2"
+  },
+  "scripts": {
+    "build": "napi build --platform --release --js index.js --dts index.d.ts",
+    "test": "npm run build && node tests/test_parse.js && node tests/test_export.js && node tests/test_edge_cases.js && node tests/test_auto_detect.js"
+  }
+}
