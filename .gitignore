@@ -1,0 +1,49 @@
+# Rust / Cargo
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock: committed for applications, not libraries
+# (workspace has a CLI binary, so we commit it)
+# Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+*.so
+.venv/
+env/
+venv/
+.pytest_cache/
+
+# Maturin build artifacts
+crates/python/target/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment / Secrets
+.env
+.env.*
+*.local
+
+# Build artifacts
+*.profraw
+*.profdata
+flamegraph.svg
+perf.data*
+
+# Proptest regression files
+# !crates/core/proptest-regressions/
+
+# Documentation
+docs/
