@@ -7,7 +7,7 @@ name = "x940"
 version = "0.1.1"
 description = "High-performance MT940 bank statement parser with JSON, CSV, and camt.053 export"
 requires-python = ">=3.8"
-readme = "../../README.md"
+readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Tahzeer A" }]
 keywords = ["mt940", "swift", "bank-statement", "camt", "iso20022"]
@@ -26,7 +26,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/tahzeer/940x"
+Repository = "https://github.com/tahzeer/x940"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
