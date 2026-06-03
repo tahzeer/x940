@@ -213,8 +213,10 @@ impl MT940 {
     #[getter]
     fn transactions(&self) -> Vec<Transaction> {
         self.statements
-            .iter()
-            .flat_map(|s| &s.transactions)
+            .first()
+            .map(|s| &s.transactions)
+            .into_iter()
+            .flat_map(|txns| txns)
             .map(|tx| Transaction {
                 value_date: tx.value_date,
                 entry_date: tx.entry_date,

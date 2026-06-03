@@ -3,8 +3,18 @@ name: test-core
 on:
   push:
     branches: [master]
+    paths:
+      - 'crates/core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test-core.yml'
   pull_request:
     branches: ["**"]
+    paths:
+      - 'crates/core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test-core.yml'
 
 env:
   CARGO_TERM_COLOR: always

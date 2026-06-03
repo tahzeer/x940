@@ -3,8 +3,20 @@ name: test-cli
 on:
   push:
     branches: [master]
+    paths:
+      - 'crates/core/**'
+      - 'crates/cli/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test-cli.yml'
   pull_request:
     branches: ["**"]
+    paths:
+      - 'crates/core/**'
+      - 'crates/cli/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test-cli.yml'
 
 jobs:
   test:
