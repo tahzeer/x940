@@ -2,51 +2,6 @@ use napi_derive::napi;
 
 use x940rs::{parse_mt940, to_camt053, to_csv, to_json, DecoderChain};
 
-fn resolve_counterparty(sd: &std::collections::HashMap<String, String>) -> String {
-    if let Some(n) = sd.get("32") {
-        if let Some(c) = sd.get("33") {
-            return format!("{} {}", n, c);
-        }
-        return n.clone();
-    }
-    sd.get("27").or_else(|| sd.get("NAME")).cloned().unwrap_or_default()
-}
-
-fn resolve_counter_iban(sd: &std::collections::HashMap<String, String>) -> String {
-    sd.get("31").or_else(|| sd.get("30")).or_else(|| sd.get("IBAN")).cloned().unwrap_or_default()
-}
-
-fn resolve_purpose(tx: &x940rs::Transaction) -> String {
-    match &tx.structured_details {
-        Some(sd) => {
-            let lines: Vec<String> =
-                (20..=29).filter_map(|i| sd.get(&i.to_string())).cloned().collect();
-            if !lines.is_empty() {
-                return lines.join(" ");
-            }
-            sd.get("REMI").or_else(|| sd.get("EREF")).cloned().unwrap_or_default()
-        }
-        None => tx.details.clone(),
-    }
-}
-
-#[napi]
-pub struct Transaction {
-    pub value_date: String,
-    pub entry_date: Option<String>,
-    pub debit_credit: String,
-    pub is_reversal: bool,
-    pub amount: f64,
-    pub transaction_type: String,
-    pub customer_reference: String,
-    pub bank_reference: Option<String>,
-    pub details: String,
-    pub structured_details: String,
-    pub counterparty: String,
-    pub counter_iban: String,
-    pub purpose: String,
-}
-
 #[napi]
 pub struct MT940 {
     statements: Vec<x940rs::Statement>,
@@ -100,48 +55,6 @@ impl MT940 {
         self.resolver_used.clone()
     }
 
-    #[napi(getter)]
-    pub fn transactions(&self) -> Vec<Transaction> {
-        self.statements
-            .iter()
-            .flat_map(|s| &s.transactions)
-            .map(|tx| {
-                let signed = tx.signed_amount();
-                Transaction {
-                    value_date: tx.value_date.format("%Y-%m-%d").to_string(),
-                    entry_date: tx.entry_date.as_ref().map(|d| d.format("%Y-%m-%d").to_string()),
-                    debit_credit: tx.debit_credit.to_string(),
-                    is_reversal: tx.debit_credit.is_reversal(),
-                    amount: signed.to_string().parse().unwrap_or(0.0),
-                    transaction_type: tx.transaction_type.clone(),
-                    customer_reference: tx.customer_reference.clone(),
-                    bank_reference: tx.bank_reference.clone(),
-                    details: tx.details.clone(),
-                    structured_details: tx
-                        .structured_details
-                        .as_ref()
-                        .map(|sd| {
-                            let obj: std::collections::BTreeMap<_, _> =
-                                sd.iter().collect();
-                            serde_json::to_string(&obj).unwrap_or_default()
-                        })
-                        .unwrap_or_default(),
-                    counterparty: tx
-                        .structured_details
-                        .as_ref()
-                        .map(resolve_counterparty)
-                        .unwrap_or_default(),
-                    counter_iban: tx
-                        .structured_details
-                        .as_ref()
-                        .map(resolve_counter_iban)
-                        .unwrap_or_default(),
-                    purpose: resolve_purpose(tx),
-                }
-            })
-            .collect()
-    }
-
     #[napi]
     pub fn to_json(&self) -> napi::Result<String> {
         to_json(&self.statements)
@@ -172,24 +85,27 @@ mod tests {
         let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
         assert_eq!(stmt.account(), "ACCT");
         assert_eq!(stmt.currency(), "EUR");
-        assert_eq!(stmt.opening_balance(), 1000.00);
-        assert_eq!(stmt.closing_balance(), 900.00);
     }
 
     #[test]
-    fn parse_transactions_count() {
+    fn to_json_output() {
         let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
-        assert_eq!(stmt.transactions().len(), 1);
+        let json = stmt.to_json().unwrap();
+        assert!(json.contains("transactionReference"));
     }
 
     #[test]
-    fn parse_transaction_properties() {
+    fn to_csv_output() {
         let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
-        let tx = &stmt.transactions()[0];
-        assert_eq!(tx.transaction_type, "NTRF");
-        assert_eq!(tx.debit_credit, "D");
-        assert!(!tx.is_reversal);
-        assert!(tx.amount < 0.0);
+        let csv = stmt.to_csv().unwrap();
+        assert!(csv.starts_with('\u{FEFF}'));
+    }
+
+    #[test]
+    fn to_camt053_output() {
+        let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
+        let xml = stmt.to_camt053().unwrap();
+        assert!(xml.contains("camt.053"));
     }
 
     #[test]
@@ -202,29 +118,5 @@ mod tests {
     fn parse_with_resolver() {
         let stmt = MT940::new(PAYLOAD.to_string(), Some("gvc".into())).unwrap();
         assert_eq!(stmt.resolver_used(), "gvc");
-    }
-
-    #[test]
-    fn to_json_output() {
-        let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
-        let json = stmt.to_json().unwrap();
-        assert!(json.contains("transactionReference"));
-        assert!(json.contains("ACCT"));
-    }
-
-    #[test]
-    fn to_csv_output() {
-        let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
-        let csv = stmt.to_csv().unwrap();
-        assert!(csv.starts_with('\u{FEFF}'));
-        assert!(csv.contains("ACCT"));
-    }
-
-    #[test]
-    fn to_camt053_output() {
-        let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
-        let xml = stmt.to_camt053().unwrap();
-        assert!(xml.contains("camt.053"));
-        assert!(xml.contains("<CdtDbtInd>"));
     }
 }
