@@ -8,7 +8,7 @@ const { MT940 } = require("../index.js");
 {
     const raw = ":20:TEST\r\n:25:ACCT\r\n:28C:1/1\r\n:60F:C240101EUR100,00\r\n:62F:C240101EUR100,00\r\n";
     const s = new MT940(raw, "auto");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     assert.equal(data.transactions.length, 0);
     assert.equal(s.account, "ACCT");
 }
@@ -16,7 +16,7 @@ const { MT940 } = require("../index.js");
 {
     const raw = ":20:TEST\r\n:25:ACCT\r\n:28C:00001\r\n:60F:C240101EUR100,00\r\n:62F:C240101EUR100,00\r\n";
     const s = new MT940(raw, "auto");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     assert.equal(data.number.statement, "00001");
 }
 
@@ -41,7 +41,7 @@ const { MT940 } = require("../index.js");
         ":86:reversal of debit\r\n" +
         ":62F:C240101EUR1500,00\r\n";
     const s = new MT940(raw, "auto");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     const tx = data.transactions[0];
     assert.equal(tx.isReversal, true);
     assert(tx.amount > 0);

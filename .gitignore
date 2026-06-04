@@ -47,3 +47,9 @@ perf.data*
 
 # Documentation
 docs/
+
+# Node.js binding artifacts
+crates/node/*.node
+crates/node/index.js
+crates/node/index.d.ts
+crates/node/target/

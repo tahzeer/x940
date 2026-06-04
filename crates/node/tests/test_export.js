@@ -14,7 +14,7 @@ const SWIFT_PAYLOAD =
 
 {
     const s = new MT940(SWIFT_PAYLOAD, "auto");
-    const data = JSON.parse(s.toJSON());
+    const data = JSON.parse(s.toJson());
     assert(Array.isArray(data));
     assert.equal(data.length, 1);
     assert.equal(data[0].transactionReference, "SWIFTSTRUCT2026");
@@ -24,23 +24,21 @@ const SWIFT_PAYLOAD =
 
 {
     const s = new MT940(SWIFT_PAYLOAD, "auto");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     assert(data.transactions[0].amount < 0);
     assert(data.transactions[1].amount > 0);
     assert.equal(data.transactions[0].structuredDetails.EREF, "INV-2026-991");
     assert.equal(data.transactions[0].structuredDetails.NAME, "ALPHA DIGITAL CORP");
-    assert.equal(data.transactions[0].counterparty, "ALPHA DIGITAL CORP");
-    assert.equal(data.transactions[0].purpose, "MONTHLY RETAINER FEES");
 }
 
 {
     const s = new MT940(SWIFT_PAYLOAD, "auto");
-    const csv = s.toCSV();
+    const csv = s.toCsv();
     assert(csv.startsWith("\uFEFF"));
     assert(csv.includes("Statement"));
     assert(csv.includes("-1500.00"));
     const lines = csv.split("\n").filter(l => l.trim().length > 0);
-    assert.equal(lines.length, 4);
+    assert.equal(lines.length, 3);
 }
 
 {

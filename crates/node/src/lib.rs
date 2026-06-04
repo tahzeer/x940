@@ -2,57 +2,45 @@ use napi_derive::napi;
 
 use x940rs::{parse_mt940, to_camt053, to_csv, to_json, DecoderChain};
 
-#[napi]
+#[napi(js_name = "MT940")]
 pub struct MT940 {
+    #[napi(readonly)]
+    pub account: String,
+    #[napi(readonly)]
+    pub currency: String,
+    #[napi(readonly)]
+    pub opening_balance: f64,
+    #[napi(readonly)]
+    pub closing_balance: f64,
+    #[napi(readonly)]
+    pub resolver_used: String,
+
     statements: Vec<x940rs::Statement>,
-    resolver_used: String,
 }
 
 #[napi]
 impl MT940 {
     #[napi(constructor)]
     pub fn new(text: String, resolver: Option<String>) -> napi::Result<Self> {
-        let resolver = resolver.unwrap_or_else(|| "auto".into());
-        let chain = DecoderChain::with_resolver(&resolver).unwrap_or_else(DecoderChain::auto);
+        let r = resolver.unwrap_or_else(|| "auto".into());
+        let chain = DecoderChain::with_resolver(&r).unwrap_or_else(DecoderChain::auto);
 
         let statements = parse_mt940(&text, &chain)
             .map_err(|e| napi::Error::from_reason(format!("Parse error: {}", e)))?;
 
+        let first = statements.first();
         Ok(MT940 {
+            account: first.map(|s| s.account_identification.clone()).unwrap_or_default(),
+            currency: first.map(|s| s.opening_balance.currency.clone()).unwrap_or_default(),
+            opening_balance: first
+                .map(|s| s.opening_balance.amount.to_string().parse().unwrap_or(0.0))
+                .unwrap_or(0.0),
+            closing_balance: first
+                .map(|s| s.closing_balance.amount.to_string().parse().unwrap_or(0.0))
+                .unwrap_or(0.0),
+            resolver_used: r,
             statements,
-            resolver_used: resolver,
         })
-    }
-
-    #[napi(getter)]
-    pub fn account(&self) -> String {
-        self.statements.first().map(|s| s.account_identification.clone()).unwrap_or_default()
-    }
-
-    #[napi(getter)]
-    pub fn currency(&self) -> String {
-        self.statements.first().map(|s| s.opening_balance.currency.clone()).unwrap_or_default()
-    }
-
-    #[napi(getter)]
-    pub fn opening_balance(&self) -> f64 {
-        self.statements
-            .first()
-            .map(|s| s.opening_balance.amount.to_string().parse().unwrap_or(0.0))
-            .unwrap_or(0.0)
-    }
-
-    #[napi(getter)]
-    pub fn closing_balance(&self) -> f64 {
-        self.statements
-            .first()
-            .map(|s| s.closing_balance.amount.to_string().parse().unwrap_or(0.0))
-            .unwrap_or(0.0)
-    }
-
-    #[napi(getter)]
-    pub fn resolver_used(&self) -> String {
-        self.resolver_used.clone()
     }
 
     #[napi]
@@ -83,8 +71,8 @@ mod tests {
     #[test]
     fn parse_basic() {
         let stmt = MT940::new(PAYLOAD.to_string(), Some("auto".into())).unwrap();
-        assert_eq!(stmt.account(), "ACCT");
-        assert_eq!(stmt.currency(), "EUR");
+        assert_eq!(stmt.account, "ACCT");
+        assert_eq!(stmt.currency, "EUR");
     }
 
     #[test]
@@ -117,6 +105,6 @@ mod tests {
     #[test]
     fn parse_with_resolver() {
         let stmt = MT940::new(PAYLOAD.to_string(), Some("gvc".into())).unwrap();
-        assert_eq!(stmt.resolver_used(), "gvc");
+        assert_eq!(stmt.resolver_used, "gvc");
     }
 }

@@ -8,7 +8,7 @@ const { MT940 } = require("../index.js");
         ":86:166?00REMITTANCE?20INV-9924?32ACME CORP\r\n" +
         ":62F:C240101EUR900,00\r\n";
     const s = new MT940(gvc, "swift");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     const tx = data.transactions[0];
     assert(tx.structuredDetails !== null);
 }
@@ -20,7 +20,7 @@ const { MT940 } = require("../index.js");
         ":86:/EREF/INV-001/NAME/ACME CORP\r\n" +
         ":62F:C240101EUR900,00\r\n";
     const s = new MT940(swift, "gvc");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     assert(data.transactions[0].structuredDetails !== null);
 }
 
@@ -31,7 +31,7 @@ const { MT940 } = require("../index.js");
         ":86:010<00PRZELEW<20FAKTURA 1234<27JOHN DOE\r\n" +
         ":62F:C240101PLN900,00\r\n";
     const s = new MT940(angular, "angular");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     assert(data.transactions[0].structuredDetails !== null);
 }
 
@@ -39,7 +39,7 @@ const { MT940 } = require("../index.js");
     const raw = ":20:T\r\n:25:A\r\n:28C:1/1\r\n:60F:C240101EUR100,00\r\n:62F:C240101EUR100,00\r\n";
     const s1 = new MT940(raw, undefined);
     const s2 = new MT940(raw, "auto");
-    assert.equal(s1.toJSON(), s2.toJSON());
+    assert.equal(s1.toJson(), s2.toJson());
 }
 
 {
@@ -53,7 +53,7 @@ const { MT940 } = require("../index.js");
         ":86:MONTHLY ACCOUNT SERVICE FEE\r\n" +
         ":62F:C240101GBP35000,00\r\n";
     const s = new MT940(stress, "auto");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     assert.equal(data.transactions.length, 3);
     assert(data.transactions[0].structuredDetails.detail !== undefined);
     assert.equal(data.transactions[1].structuredDetails.EREF, "STRESS-881");
@@ -68,7 +68,7 @@ const { MT940 } = require("../index.js");
         ":62F:C240101EUR100,00\r\n";
     for (const r of ["auto", "swift", "gvc", "angular"]) {
         const s = new MT940(stress, r);
-        const data = JSON.parse(s.toJSON())[0];
+        const data = JSON.parse(s.toJson())[0];
         assert.equal(data.transactions.length, 1);
     }
 }
@@ -80,7 +80,7 @@ const { MT940 } = require("../index.js");
         ":61:2401012401C50,00N201\r\n:86:201?00GUTSCHRIFT?20KUNDE?32MUELLER CO\r\n" +
         ":62F:C240101EUR950,00\r\n";
     const s = new MT940(gvc, "swift");
-    const data = JSON.parse(s.toJSON())[0];
+    const data = JSON.parse(s.toJson())[0];
     assert.equal(data.transactions.length, 2);
     for (const tx of data.transactions) {
         assert(tx.structuredDetails !== null);
