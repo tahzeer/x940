@@ -3,6 +3,24 @@ name: release
 on:
   push:
     tags: ["[0-9]*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0)"
+        required: true
+        type: string
+      publish_crates:
+        description: "Publish to crates.io"
+        type: boolean
+        default: true
+      publish_pypi:
+        description: "Publish to PyPI"
+        type: boolean
+        default: true
+      publish_npm:
+        description: "Publish to npm"
+        type: boolean
+        default: true
 
 jobs:
   verify:
@@ -10,21 +28,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify tag matches version
+      - name: Verify version match
         run: |
-          tag_ver="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            ver="${{ github.ref_name }}"
+          else
+            ver="${{ inputs.version }}"
+          fi
           cargo_ver=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          if [ "$tag_ver" != "$cargo_ver" ]; then
-            echo "Tag $tag_ver does not match Cargo.toml $cargo_ver"
+          if [ "$ver" != "$cargo_ver" ]; then
+            echo "Version $ver does not match Cargo.toml $cargo_ver"
             exit 1
           fi
-          echo "Releasing version $cargo_ver"
+          echo "version=$cargo_ver" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
         run: cargo test -p x940rs -p x940
 
   publish-crates:
     needs: verify
+    if: ${{ github.event_name == 'push' || inputs.publish_crates }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +60,7 @@ jobs:
 
   build-wheels:
     needs: verify
+    if: ${{ github.event_name == 'push' || inputs.publish_pypi }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -62,6 +86,7 @@ jobs:
 
   publish-pypi:
     needs: build-wheels
+    if: ${{ github.event_name == 'push' || inputs.publish_pypi }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -75,3 +100,29 @@ jobs:
 
       - name: Publish to PyPI
         run: pip install twine && twine upload *-none-*.whl *.whl --username __token__ --password ${{ secrets.PYPI_TOKEN }}
+
+  publish-npm:
+    needs: verify
+    if: ${{ github.event_name == 'push' || inputs.publish_npm }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install deps
+        run: npm install
+        working-directory: crates/node
+
+      - name: Build native addon
+        run: npx napi build --platform --release
+        working-directory: crates/node
+
+      - name: Publish to npm
+        run: npm publish --access public
+        working-directory: crates/node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
