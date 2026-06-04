@@ -29,7 +29,7 @@ npm install x940
 
 ```toml
 [dependencies]
-x940rs = "0.1"
+x940rs = "0.1.1"
 ```
 
 ## Build from Source

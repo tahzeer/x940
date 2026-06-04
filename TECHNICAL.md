@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-x940 is a **Cargo workspace** containing five crates:
+x940 is a **Cargo workspace** containing four crates:
 
 ```mermaid
 graph TD

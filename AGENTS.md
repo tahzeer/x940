@@ -53,7 +53,7 @@ crates/python/      ← thin adapter: PyO3 -> core (needs libpython3.12 to link;
                       no Rust unit tests possible: pytest only)
   tests/            ← pytest integration tests (run via `pytest crates/python/tests/`)
 crates/node/        ← thin adapter: napi-rs -> core (cdylib, no Rust int. tests)
-  tests/            ← JS integration tests only (run via `npm test`)
+  tests/            ← JS integration tests only; Rust unit tests inline (6)
 ```
 
 ## Non-obvious rules
@@ -85,10 +85,10 @@ crates/node/        ← thin adapter: napi-rs -> core (cdylib, no Rust int. test
 | `test-core.yml` | push master, PR any branch | `cargo test -p x940rs -p x940` + proptests |
 | `test-cli.yml` | push master, PR any branch | CLI integration tests (3 OS matrix) |
 | `test-node.yml` | push master, PR any branch | Rust unit + JS integration (3 OS × 2 Node matrix) |
-| `test-python.yml` | push master, PR any branch | pytest (3 OS × 5 Python matrix) |
+| `test-python.yml` | push master, PR any branch | pytest (3 OS × 3 Python matrix: 3.10-3.12) |
 | `check-format.yml` | PR any branch | clippy, fmt, doc, build, 3-way version sync |
 | `tag.yml` | manual dispatch | verify 3 versions match input, create git tag |
-| `release.yml` | tag push | tests → cargo publish + maturin publish |
+| `release.yml` | tag push / manual dispatch | tests → cargo publish + wheel build + PyPI publish + npm publish |
 
 ## Versioning
 
