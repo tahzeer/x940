@@ -14,5 +14,8 @@ crate-type = ["cdylib"]
 x940rs = { path = "../core" }
 wasm-bindgen.workspace = true
 
+[package.metadata.wasm-pack]
+wasm-opt = false
+
 [dev-dependencies]
 wasm-bindgen-test.workspace = true
