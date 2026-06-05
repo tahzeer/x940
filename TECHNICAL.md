@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-x940 is a **Cargo workspace** containing four crates:
+x940 is a **Cargo workspace** containing five crates:
 
 ```mermaid
 graph TD
@@ -11,31 +11,36 @@ graph TD
         py["x940py<br/>(PyO3 binding)"]
         cli["x940<br/>(CLI binary)"]
         node["x940node<br/>(napi-rs binding)"]
+        wasm["x940wasm<br/>(wasm-bindgen)"]
     end
 
     py -->|"depends on"| core
     cli -->|"depends on"| core
     node -->|"depends on"| core
+    wasm -->|"depends on"| core
 
     subgraph "External"
         python["Python<br/>(pip install x940)"]
         terminal["Terminal<br/>(x940 transform)"]
         npm["Node.js<br/>(npm install x940)"]
+        npm_wasm["WASM<br/>(npm install x940-wasm)"]
         rustlib["Rust<br/>(cargo add x940rs)"]
     end
 
     python -->|"imports"| py
     terminal -->|"runs"| cli
     npm -->|"requires"| node
+    npm_wasm -->|"imports"| wasm
     rustlib -->|"uses"| core
 ```
 
-| Crate       | Role                                            |
-|-------------|-------------------------------------------------|
+| Crate       | Role                                               |
+|-------------|----------------------------------------------------|
 | `x940rs`    | All business logic: parsing, models, decoders, serializers |
-| `x940py`    | PyO3 binding: exposes `MT940` class to Python   |
-| `x940`      | CLI binary via `clap`                           |
-| `x940node`  | napi-rs binding: native Node.js addon           |
+| `x940py`    | PyO3 binding: exposes `MT940` class to Python      |
+| `x940`      | CLI binary via `clap`                              |
+| `x940node`  | napi-rs binding: native Node.js addon              |
+| `x940wasm`  | wasm-bindgen: WebAssembly for browser, Deno, Bun   |
 
 **Golden rule**: All business logic lives in `crates/core`. Every other crate
 is a thin adapter. A bug fix in `core` benefits all consumers automatically.
@@ -260,6 +265,7 @@ graph LR
         pyo3[PyO3 + Maturin]
         clap[clap]
         napi[napi-rs]
+        wasmbind[wasm-bindgen]
         thiserror[thiserror]
     end
 
@@ -271,6 +277,7 @@ graph LR
     rust --> pyo3
     rust --> clap
     rust --> napi
+    rust --> wasmbind
     rust --> thiserror
 ```
 
@@ -283,6 +290,7 @@ graph LR
 | XML output         | `quick-xml`         | camt.053 XML generation        |
 | Python binding     | `pyo3` + `maturin`  | Native CPython extension       |
 | Node.js binding    | `napi-rs`           | Native Node addon              |
+| WASM binding       | `wasm-bindgen`      | WebAssembly for browser/Deno   |
 | CLI                | `clap`              | Argument parsing               |
 | Error handling     | `thiserror`         | Ergonomic error types           |
 
@@ -330,10 +338,12 @@ flowchart TD
     core -->|"PyO3 FFI"| py["crates/python<br/>x.MT940(data)"]
     core -->|"native"| cli["crates/cli<br/>x940 transform"]
     core -->|"napi-rs"| node["crates/node<br/>new MT940(data)"]
+    core -->|"wasm-bindgen"| wasm["crates/wasm<br/>new MT940(data)"]
 
     py --> python_user["import x940 as x"]
     cli --> terminal_user["x940 transform input.sta"]
     node --> ts_user["import { MT940 } from 'x940'"]
+    wasm --> browser_user["import { MT940 } from 'x940-wasm'"]
 ```
 
 ## 9. Known Limitations Addressed

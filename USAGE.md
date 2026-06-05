@@ -247,6 +247,67 @@ for (const file of files) {
 }
 ```
 
+## WASM
+
+```js
+import { MT940 } from "x940-wasm";
+
+const response = await fetch("statement.sta");
+const data = await response.text();
+const stmt = new MT940(data, "auto");
+
+// Inspection
+console.log(`Account:  ${stmt.account}`);
+console.log(`Currency: ${stmt.currency}`);
+console.log(`Opening:  ${stmt.openingBalance.toFixed(2)}`);
+console.log(`Closing:  ${stmt.closingBalance.toFixed(2)}`);
+
+for (const tx of stmt.transactions()) {
+    const dir = tx.isReversal ? "REV" : (tx.amount < 0 ? "OUT" : "IN ");
+    console.log(`  ${dir} ${tx.amount.toFixed(2)} | ${tx.transactionType} | ${tx.counterparty}`);
+}
+
+// Export
+console.log(stmt.toJson());
+console.log(stmt.toCsv());
+console.log(stmt.toCamt053());
+```
+
+### With Explicit Dialect
+
+```js
+const stmt = new MT940(data, "gvc");
+console.log(`Resolver: ${stmt.resolverUsed}`);
+
+for (const tx of stmt.transactions()) {
+    // WASM transactions have getter-based properties (camelCase)
+    console.log(`  ${tx.debitCredit} ${tx.amount} | ${tx.transactionType} | ${tx.counterparty}`);
+}
+```
+
+### Transaction Properties
+
+```js
+const tx = stmt.transactions()[0];
+
+tx.date              // "2026-06-01"
+tx.entryDate         // "2026-06-01" or null
+tx.debitCredit       // "D", "C", "RD", or "RC"
+tx.amount            // signed (negative for debits)
+tx.isReversal        // bool
+tx.transactionType   // "NTRF", "NMSC", "N166", etc.
+tx.customerReference // string
+tx.bankReference     // string or null
+tx.details           // raw :86: text
+tx.counterparty      // resolved counterparty name or null
+tx.counterIban       // resolved counterparty IBAN or null
+tx.purpose           // resolved remittance/purpose text or null
+```
+
+Note: WASM `Transaction` objects use camelCase getters and `transactions()` is a
+method call (not a property). Properties mirror the Node.js binding but follow
+wasm-bindgen conventions.
+
 ## CLI
 
 ```bash
@@ -384,8 +445,10 @@ flowchart TD
     core --> py["PyO3: crates/python<br/>x.MT940(data)"]
     core --> cli["native: crates/cli<br/>x940 transform"]
     core --> node["napi-rs: crates/node<br/>new MT940(data)"]
+    core --> wasm["wasm-bindgen: crates/wasm<br/>new MT940(data)"]
 
     py --> puser["Python: import x940 as x"]
     cli --> cuser["Terminal: x940 transform input.sta"]
     node --> nuser["Node.js: import { MT940 } from 'x940'"]
+    wasm --> wuser["WASM: import { MT940 } from 'x940-wasm'"]
 ```

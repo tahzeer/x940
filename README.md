@@ -8,7 +8,7 @@
 High-performance MT940 bank statement parser. Converts legacy SWIFT MT940 files
 to JSON, CSV, and ISO 20022 camt.053 XML.
 
-Built in Rust with native Python, Node.js, and CLI bindings.
+Built in Rust with native Python, Node.js, WASM, and CLI bindings.
 
 ## Installation
 
@@ -28,6 +28,12 @@ cargo install x940
 
 ```bash
 npm install x940
+```
+
+### WASM
+
+```bash
+npm install x940-wasm
 ```
 
 ### Rust
@@ -56,6 +62,11 @@ uv run pytest crates/python/tests/ -v
 
 # Node.js binding: build the native addon
 cd crates/node && npm install && napi build --platform --release
+
+# WASM binding: build with wasm-pack
+rustup target add wasm32-unknown-unknown
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+cd crates/wasm && npm test
 
 # Run tests
 cargo test -p x940rs -p x940
@@ -98,6 +109,15 @@ stmt.toCSV();
 stmt.toCamt053();
 ```
 
+```js
+// WASM (browser, Deno, Bun, Node.js)
+import { MT940 } from "x940-wasm";
+const stmt = new MT940(data, "auto");
+stmt.toJson();
+stmt.toCsv();
+stmt.toCamt053();
+```
+
 ```rust
 use x940rs::{parse_mt940, DecoderChain, to_json};
 
@@ -131,12 +151,13 @@ to the unstructured safety net: no data loss.
 
 ## Bindings
 
-| Binding       | Technology      |
-|---------------|-----------------|
-| Rust          | Native crate    |
-| Python        | PyO3 + Maturin  |
-| CLI           | Native binary   |
-| Node.js/TS    | napi-rs         |
+| Binding       | Technology        |
+|---------------|-------------------|
+| Rust          | Native crate      |
+| Python        | PyO3 + Maturin    |
+| CLI           | Native binary     |
+| Node.js/TS    | napi-rs           |
+| WASM          | wasm-bindgen      |
 
 ## License
 

@@ -22,11 +22,13 @@ cargo fmt --check
    - CLI interface → `crates/cli/`
    - Python binding → `crates/python/`
    - Node.js binding → `crates/node/`
+   - WASM binding → `crates/wasm/`
 3. Add tests:
    - Inline unit tests: `#[cfg(test)] mod tests` in the same file
    - Core integration tests: `crates/core/tests/`
    - Python tests: `crates/python/tests/`
    - Node.js tests: `crates/node/tests/` (JS files, run via `npm test`)
+   - WASM tests: `crates/wasm/tests/` (JS files, run via `npm test` after wasm-pack build)
 4. Run the full suite:
    ```bash
    cargo test -p x940rs -p x940 -p x940node
@@ -46,10 +48,11 @@ cargo fmt --check
 
 ## Commit Conventions
 
-- Prefix commits with the crate: `core:`, `cli:`, `python:`, `node:`, `docs:`
+- Prefix commits with the crate: `core:`, `cli:`, `python:`, `node:`, `wasm:`, `docs:`
 - Example: `core: implement :61: continuation line parsing`
 - Example: `python: add Transaction.counterparty property`
 - Example: `node: add JS integration tests`
+- Example: `wasm: add WASM bindings + CI`
 - Keep commits small and focused
 
 ## Pull Requests
@@ -80,16 +83,26 @@ napi build --platform --release
 npm test
 ```
 
+## WASM Binding Development
+
+```bash
+rustup target add wasm32-unknown-unknown
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+cd crates/wasm
+npm test
+```
+
 ## Adding a New Export Format
 
 1. Add serializer in `crates/core/src/serializers/`
 2. Expose via `pub fn` in `crates/core/src/lib.rs`
 3. Python: add `fn to_<format>` in `crates/python/src/lib.rs`
 4. Node: add `#[napi] fn to_<format>` in `crates/node/src/lib.rs`
-5. CLI: add `--format <format>` variant in `crates/cli/src/main.rs`
-6. Write golden file tests with expected output
-7. Update README.md and TECHNICAL.md
-8. Update USAGE.md with examples for all bindings
+5. WASM: add `fn to_<format>` in `crates/wasm/src/lib.rs`
+6. CLI: add `--format <format>` variant in `crates/cli/src/main.rs`
+7. Write golden file tests with expected output
+8. Update README.md and TECHNICAL.md
+9. Update USAGE.md with examples for all bindings
 
 ## Adding a New Binding
 
@@ -98,8 +111,10 @@ npm test
 3. Add to workspace `members` in root `Cargo.toml`
 4. Add tests (inline Rust + language-level integration)
 5. Add CI workflow in `.github/workflows/test-<lang>.yml`
-6. Add build-from-source instructions in README.md
-7. Add usage examples in USAGE.md
+6. Add job to `.github/workflows/release.yml` for npm publishing
+7. Add to `bump.sh` version sync
+8. Add build-from-source instructions in README.md
+9. Add usage examples in USAGE.md
 
 ## Reporting Issues
 

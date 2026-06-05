@@ -34,11 +34,18 @@ uv run pytest crates/python/tests/ -v
 
 # Node.js binding (requires npm)
 cd crates/node && npm install && npm test
+
+# WASM binding (requires wasm-pack + wasm32 target)
+rustup target add wasm32-unknown-unknown
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+cargo check -p x940wasm --target wasm32-unknown-unknown
+cd crates/wasm && npm test
 ```
 
 `cargo test --workspace` will fail locally if Python dev headers are missing.
 Use `-p x940rs -p x940` instead. Node.js `npm test` builds the napi addon
-first then runs JS integration tests.
+first then runs JS integration tests. WASM `npm test` builds with wasm-pack
+then runs JS integration tests in Node.js.
 
 ## Project layout
 
@@ -53,7 +60,9 @@ crates/python/      ← thin adapter: PyO3 -> core (needs libpython3.12 to link;
                       no Rust unit tests possible: pytest only)
   tests/            ← pytest integration tests (run via `pytest crates/python/tests/`)
 crates/node/        ← thin adapter: napi-rs -> core (cdylib, no Rust int. tests)
-  tests/            ← JS integration tests only; Rust unit tests inline (6)
+  tests/            ← JS integration tests only; Rust unit tests inline (8)
+crates/wasm/        ← thin adapter: wasm-bindgen -> core (cdylib, wasm32 target)
+  tests/            ← JS integration tests only (run via `wasm-pack build` + node)
 ```
 
 ## Non-obvious rules
@@ -86,15 +95,17 @@ crates/node/        ← thin adapter: napi-rs -> core (cdylib, no Rust int. test
 | `test-cli.yml` | push master, PR any branch | CLI integration tests (3 OS matrix) |
 | `test-node.yml` | push master, PR any branch | Rust unit + JS integration (3 OS × 2 Node matrix) |
 | `test-python.yml` | push master, PR any branch | pytest (3 OS × 3 Python matrix: 3.10-3.12) |
-| `check-format.yml` | PR any branch | clippy, fmt, doc, build, 3-way version sync |
-| `tag.yml` | manual dispatch | verify 3 versions match input, create git tag |
-| `release.yml` | tag push / manual dispatch | tests → cargo publish + wheel build + PyPI publish + npm publish |
+| `test-wasm.yml` | push master, PR any branch | JS integration via wasm-pack (3 OS × 2 Node matrix) |
+| `check-format.yml` | PR any branch | clippy, fmt, doc, build, 4-way version sync |
+| `tag.yml` | manual dispatch | verify 4 versions match input, create git tag |
+| `release.yml` | tag push / manual dispatch | tests → cargo publish + wheel build + PyPI publish + npm publish (native + wasm) |
 
 ## Versioning
 
 All packages share one version in `Cargo.toml` (all Rust crates inherit via
 `version.workspace = true`). Use `./bump.sh 0.2.0` to sync `Cargo.toml`,
-`crates/python/pyproject.toml`, and `crates/node/package.json` at once.
+`crates/python/pyproject.toml`, `crates/node/package.json`, and
+`crates/wasm/package.json` at once.
 The `check-format.yml` CI enforces they stay in sync on every PR.
 
 ## Adding a new Tag 86 dialect
@@ -106,3 +117,4 @@ The `check-format.yml` CI enforces they stay in sync on every PR.
 5. `tests/data/new_dialect/`: `.sta` payload + expected `.json` golden file
 6. `crates/python/tests/test_dialects.py`: Python-side dialect test
 7. `crates/node/tests/test_auto_detect.js`: Node.js dialect test
+8. `crates/wasm/tests/test_auto_detect.js`: WASM dialect test
