@@ -4,19 +4,19 @@ on:
   push:
     branches: [master]
     paths:
-      - 'crates/core/**'
-      - 'crates/wasm/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/test-wasm.yml'
+      - "crates/core/**"
+      - "crates/wasm/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/test-wasm.yml"
   pull_request:
     branches: ["**"]
     paths:
-      - 'crates/core/**'
-      - 'crates/wasm/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/test-wasm.yml'
+      - "crates/core/**"
+      - "crates/wasm/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/test-wasm.yml"
 
 jobs:
   test:
@@ -34,9 +34,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install wasm-pack
-        run: |
-          rm -f "$HOME/.cargo/bin/wasm-pack"
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Cache Cargo
         uses: actions/cache@v4
