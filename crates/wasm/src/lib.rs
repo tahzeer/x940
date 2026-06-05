@@ -164,14 +164,17 @@ impl MT940 {
         self.statements.iter().flat_map(|s| &s.transactions).map(Transaction::from_core).collect()
     }
 
+    #[wasm_bindgen(js_name = "toJson")]
     pub fn to_json(&self) -> Result<String, JsValue> {
         to_json(&self.statements).map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))
     }
 
+    #[wasm_bindgen(js_name = "toCsv")]
     pub fn to_csv(&self) -> Result<String, JsValue> {
         to_csv(&self.statements).map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))
     }
 
+    #[wasm_bindgen(js_name = "toCamt053")]
     pub fn to_camt053(&self) -> Result<String, JsValue> {
         to_camt053(&self.statements).map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))
     }
