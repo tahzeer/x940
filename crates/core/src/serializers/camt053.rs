@@ -1,149 +1,219 @@
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::Writer;
+
 use crate::statement::Statement;
 
-use super::{date_string, resolve_counter_iban, resolve_counterparty, resolve_purpose, xml_escape};
+use super::date_string;
 
-pub fn to_camt053(statements: &[Statement]) -> crate::error::Result<String> {
-    let mut xml = String::new();
-    xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    xml.push_str("<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:camt.053.001.06\">\n");
-    xml.push_str("  <BkToCstmrStmt>\n");
+type CResult<T> = std::result::Result<T, crate::error::ParseError>;
 
-    xml.push_str("    <GrpHdr>\n");
-    xml.push_str("      <MsgId>MT940-EXPORT</MsgId>\n");
-    xml.push_str("      <CreDtTm>2026-01-01T00:00:00Z</CreDtTm>\n");
-    xml.push_str("    </GrpHdr>\n");
-
-    for s in statements {
-        xml.push_str("    <Stmt>\n");
-        xml.push_str(&format!("      <Id>{}</Id>\n", xml_escape(&s.transaction_reference)));
-        xml.push_str("      <CreDtTm>2026-01-01T00:00:00Z</CreDtTm>\n");
-
-        xml.push_str("      <Acct>\n");
-        xml.push_str("        <Id>\n");
-        xml.push_str(&format!(
-            "          <IBAN>{}</IBAN>\n",
-            xml_escape(&s.account_identification)
-        ));
-        xml.push_str("        </Id>\n");
-        xml.push_str(&format!(
-            "          <Ccy>{}</Ccy>\n",
-            xml_escape(&s.opening_balance.currency)
-        ));
-        xml.push_str("      </Acct>\n");
-
-        write_balance_xml(&mut xml, "OPBD", &s.opening_balance);
-        write_balance_xml(&mut xml, "CLBD", &s.closing_balance);
-
-        for (i, tx) in s.transactions.iter().enumerate() {
-            let dc = if tx.debit_credit.is_debit() { "DBIT" } else { "CRDT" };
-            let reversal = if tx.debit_credit.is_reversal() { "true" } else { "false" };
-            let entry_date = tx.entry_date.as_ref().unwrap_or(&tx.value_date);
-
-            xml.push_str("      <Ntry>\n");
-            xml.push_str(&format!("        <NtryRef>TXN-{}</NtryRef>\n", i + 1));
-            xml.push_str(&format!(
-                "        <Amt Ccy=\"{}\">{:.2}</Amt>\n",
-                s.opening_balance.currency, tx.amount
-            ));
-            xml.push_str(&format!("        <CdtDbtInd>{}</CdtDbtInd>\n", dc));
-            xml.push_str(&format!("        <RvslInd>{}</RvslInd>\n", reversal));
-            xml.push_str(&format!(
-                "        <BookgDt>\n          <Dt>{}</Dt>\n        </BookgDt>\n",
-                date_string(entry_date)
-            ));
-            xml.push_str(&format!(
-                "        <ValDt>\n          <Dt>{}</Dt>\n        </ValDt>\n",
-                date_string(&tx.value_date)
-            ));
-            xml.push_str("        <BkTxCd>\n");
-            xml.push_str("          <Prtry>\n");
-            xml.push_str(&format!("            <Cd>{}</Cd>\n", xml_escape(&tx.transaction_type)));
-            xml.push_str("          </Prtry>\n");
-            xml.push_str("        </BkTxCd>\n");
-
-            xml.push_str("        <NtryDtls>\n");
-            xml.push_str("          <TxDtls>\n");
-
-            let (cp_name, cp_iban) = match &tx.structured_details {
-                Some(sd) => (resolve_counterparty(sd), resolve_counter_iban(sd)),
-                None => (String::new(), String::new()),
-            };
-
-            if !cp_name.is_empty() {
-                xml.push_str("            <RltdPties>\n");
-                if tx.debit_credit.is_debit() {
-                    xml.push_str("              <Cdtr>\n");
-                    xml.push_str("                <Pty>\n");
-                    xml.push_str(&format!("                  <Nm>{}</Nm>\n", xml_escape(&cp_name)));
-                    xml.push_str("                </Pty>\n");
-                    xml.push_str("              </Cdtr>\n");
-                    if !cp_iban.is_empty() {
-                        xml.push_str("              <CdtrAcct>\n");
-                        xml.push_str("                <Id>\n");
-                        xml.push_str(&format!(
-                            "                  <IBAN>{}</IBAN>\n",
-                            xml_escape(&cp_iban)
-                        ));
-                        xml.push_str("                </Id>\n");
-                        xml.push_str("              </CdtrAcct>\n");
-                    }
-                } else {
-                    xml.push_str("              <Dbtr>\n");
-                    xml.push_str("                <Pty>\n");
-                    xml.push_str(&format!("                  <Nm>{}</Nm>\n", xml_escape(&cp_name)));
-                    xml.push_str("                </Pty>\n");
-                    xml.push_str("              </Dbtr>\n");
-                    if !cp_iban.is_empty() {
-                        xml.push_str("              <DbtrAcct>\n");
-                        xml.push_str("                <Id>\n");
-                        xml.push_str(&format!(
-                            "                  <IBAN>{}</IBAN>\n",
-                            xml_escape(&cp_iban)
-                        ));
-                        xml.push_str("                </Id>\n");
-                        xml.push_str("              </DbtrAcct>\n");
-                    }
-                }
-                xml.push_str("            </RltdPties>\n");
-            }
-
-            let purpose = match &tx.structured_details {
-                Some(sd) => resolve_purpose(sd),
-                None => tx.details.clone(),
-            };
-            if !purpose.is_empty() {
-                xml.push_str("            <RmtInf>\n");
-                xml.push_str(&format!("              <Ustrd>{}</Ustrd>\n", xml_escape(&purpose)));
-                xml.push_str("            </RmtInf>\n");
-            }
-
-            xml.push_str("          </TxDtls>\n");
-            xml.push_str("        </NtryDtls>\n");
-            xml.push_str("      </Ntry>\n");
-        }
-
-        xml.push_str("    </Stmt>\n");
+fn io_err(e: std::io::Error) -> crate::error::ParseError {
+    crate::error::ParseError::Parse {
+        message: format!("camt.053 XML error: {}", e),
     }
-
-    xml.push_str("  </BkToCstmrStmt>\n");
-    xml.push_str("</Document>\n");
-
-    Ok(xml)
 }
 
-fn write_balance_xml(buf: &mut String, code: &str, bal: &crate::models::Balance) {
+fn now_iso() -> String {
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+pub fn to_camt053(statements: &[Statement]) -> crate::error::Result<String> {
+    let mut buf = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buf, b' ', 2);
+
+    writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None))).map_err(io_err)?;
+
+    let mut doc = BytesStart::new("Document");
+    doc.push_attribute(("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.053.001.06"));
+    writer.write_event(Event::Start(doc)).map_err(io_err)?;
+    writer.write_event(Event::Start(BytesStart::new("BkToCstmrStmt"))).map_err(io_err)?;
+
+    let creation_time = now_iso();
+    let first_ref =
+        statements.first().map(|s| s.transaction_reference.as_str()).unwrap_or("export");
+    let msg_id = format!("MT940-{}-{}", first_ref, chrono::Utc::now().timestamp_millis());
+
+    // Group header
+    writer.write_event(Event::Start(BytesStart::new("GrpHdr"))).map_err(io_err)?;
+    write_text_elem(&mut writer, "MsgId", &msg_id)?;
+    write_text_elem(&mut writer, "CreDtTm", &creation_time)?;
+    writer.write_event(Event::End(BytesEnd::new("GrpHdr"))).map_err(io_err)?;
+
+    for s in statements {
+        write_statement(&mut writer, s, &creation_time)?;
+    }
+
+    writer.write_event(Event::End(BytesEnd::new("BkToCstmrStmt"))).map_err(io_err)?;
+    writer.write_event(Event::End(BytesEnd::new("Document"))).map_err(io_err)?;
+
+    String::from_utf8(buf).map_err(|e| crate::error::ParseError::Parse {
+        message: format!("camt.053 encoding error: {}", e),
+    })
+}
+
+fn write_statement<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    s: &Statement,
+    creation_time: &str,
+) -> CResult<()> {
+    writer.write_event(Event::Start(BytesStart::new("Stmt"))).map_err(io_err)?;
+
+    write_text_elem(writer, "Id", &s.transaction_reference)?;
+    write_text_elem(writer, "CreDtTm", creation_time)?;
+
+    // Account
+    writer.write_event(Event::Start(BytesStart::new("Acct"))).map_err(io_err)?;
+    writer.write_event(Event::Start(BytesStart::new("Id"))).map_err(io_err)?;
+    write_text_elem(writer, "IBAN", &s.account_identification)?;
+    writer.write_event(Event::End(BytesEnd::new("Id"))).map_err(io_err)?;
+    write_text_elem(writer, "Ccy", &s.opening_balance.currency)?;
+    writer.write_event(Event::End(BytesEnd::new("Acct"))).map_err(io_err)?;
+
+    // Balances
+    write_balance(writer, "OPBD", &s.opening_balance)?;
+    write_balance(writer, "CLBD", &s.closing_balance)?;
+
+    // Transactions
+    for (i, tx) in s.transactions.iter().enumerate() {
+        write_transaction(writer, s, tx, i)?;
+    }
+
+    writer.write_event(Event::End(BytesEnd::new("Stmt"))).map_err(io_err)?;
+    Ok(())
+}
+
+fn write_balance<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    code: &str,
+    bal: &crate::models::Balance,
+) -> CResult<()> {
     let dc = if bal.debit_credit.is_debit() { "DBIT" } else { "CRDT" };
-    buf.push_str("      <Bal>\n");
-    buf.push_str("        <Tp>\n");
-    buf.push_str("          <CdOrPrtry>\n");
-    buf.push_str(&format!("            <Cd>{}</Cd>\n", code));
-    buf.push_str("          </CdOrPrtry>\n");
-    buf.push_str("        </Tp>\n");
-    buf.push_str(&format!("        <Amt Ccy=\"{}\">{:.2}</Amt>\n", bal.currency, bal.amount));
-    buf.push_str(&format!("        <CdtDbtInd>{}</CdtDbtInd>\n", dc));
-    buf.push_str(&format!(
-        "        <Dt>\n          <Dt>{}</Dt>\n        </Dt>\n",
-        date_string(&bal.date)
-    ));
-    buf.push_str("      </Bal>\n");
+    let amt = format!("{:.2}", bal.amount);
+
+    writer.write_event(Event::Start(BytesStart::new("Bal"))).map_err(io_err)?;
+
+    writer.write_event(Event::Start(BytesStart::new("Tp"))).map_err(io_err)?;
+    writer.write_event(Event::Start(BytesStart::new("CdOrPrtry"))).map_err(io_err)?;
+    write_text_elem(writer, "Cd", code)?;
+    writer.write_event(Event::End(BytesEnd::new("CdOrPrtry"))).map_err(io_err)?;
+    writer.write_event(Event::End(BytesEnd::new("Tp"))).map_err(io_err)?;
+
+    let mut amt_tag = BytesStart::new("Amt");
+    amt_tag.push_attribute(("Ccy", bal.currency.as_str()));
+    write_amt_elem(writer, amt_tag, &amt)?;
+
+    write_text_elem(writer, "CdtDbtInd", dc)?;
+
+    writer.write_event(Event::Start(BytesStart::new("Dt"))).map_err(io_err)?;
+    write_text_elem(writer, "Dt", &date_string(&bal.date))?;
+    writer.write_event(Event::End(BytesEnd::new("Dt"))).map_err(io_err)?;
+
+    writer.write_event(Event::End(BytesEnd::new("Bal"))).map_err(io_err)?;
+    Ok(())
+}
+
+fn write_transaction<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    s: &Statement,
+    tx: &crate::models::Transaction,
+    idx: usize,
+) -> CResult<()> {
+    let dc = if tx.debit_credit.is_debit() { "DBIT" } else { "CRDT" };
+    let reversal = if tx.debit_credit.is_reversal() { "true" } else { "false" };
+    let entry_date = tx.entry_date.as_ref().unwrap_or(&tx.value_date);
+    let amt = format!("{:.2}", tx.amount);
+
+    writer.write_event(Event::Start(BytesStart::new("Ntry"))).map_err(io_err)?;
+
+    write_text_elem(writer, "NtryRef", &format!("TXN-{}", idx + 1))?;
+
+    let mut amt_tag = BytesStart::new("Amt");
+    amt_tag.push_attribute(("Ccy", s.opening_balance.currency.as_str()));
+    write_amt_elem(writer, amt_tag, &amt)?;
+
+    write_text_elem(writer, "CdtDbtInd", dc)?;
+    write_text_elem(writer, "RvslInd", reversal)?;
+
+    writer.write_event(Event::Start(BytesStart::new("BookgDt"))).map_err(io_err)?;
+    write_text_elem(writer, "Dt", &date_string(entry_date))?;
+    writer.write_event(Event::End(BytesEnd::new("BookgDt"))).map_err(io_err)?;
+
+    writer.write_event(Event::Start(BytesStart::new("ValDt"))).map_err(io_err)?;
+    write_text_elem(writer, "Dt", &date_string(&tx.value_date))?;
+    writer.write_event(Event::End(BytesEnd::new("ValDt"))).map_err(io_err)?;
+
+    writer.write_event(Event::Start(BytesStart::new("BkTxCd"))).map_err(io_err)?;
+    writer.write_event(Event::Start(BytesStart::new("Prtry"))).map_err(io_err)?;
+    write_text_elem(writer, "Cd", &tx.transaction_type)?;
+    writer.write_event(Event::End(BytesEnd::new("Prtry"))).map_err(io_err)?;
+    writer.write_event(Event::End(BytesEnd::new("BkTxCd"))).map_err(io_err)?;
+
+    writer.write_event(Event::Start(BytesStart::new("NtryDtls"))).map_err(io_err)?;
+    writer.write_event(Event::Start(BytesStart::new("TxDtls"))).map_err(io_err)?;
+
+    let cp_name = tx.counterparty().unwrap_or_default();
+    let cp_iban = tx.counter_iban().unwrap_or_default();
+
+    if !cp_name.is_empty() {
+        writer.write_event(Event::Start(BytesStart::new("RltdPties"))).map_err(io_err)?;
+        if tx.debit_credit.is_debit() {
+            writer.write_event(Event::Start(BytesStart::new("Cdtr"))).map_err(io_err)?;
+            writer.write_event(Event::Start(BytesStart::new("Pty"))).map_err(io_err)?;
+            write_text_elem(writer, "Nm", &cp_name)?;
+            writer.write_event(Event::End(BytesEnd::new("Pty"))).map_err(io_err)?;
+            writer.write_event(Event::End(BytesEnd::new("Cdtr"))).map_err(io_err)?;
+            if !cp_iban.is_empty() {
+                writer.write_event(Event::Start(BytesStart::new("CdtrAcct"))).map_err(io_err)?;
+                writer.write_event(Event::Start(BytesStart::new("Id"))).map_err(io_err)?;
+                write_text_elem(writer, "IBAN", &cp_iban)?;
+                writer.write_event(Event::End(BytesEnd::new("Id"))).map_err(io_err)?;
+                writer.write_event(Event::End(BytesEnd::new("CdtrAcct"))).map_err(io_err)?;
+            }
+        } else {
+            writer.write_event(Event::Start(BytesStart::new("Dbtr"))).map_err(io_err)?;
+            writer.write_event(Event::Start(BytesStart::new("Pty"))).map_err(io_err)?;
+            write_text_elem(writer, "Nm", &cp_name)?;
+            writer.write_event(Event::End(BytesEnd::new("Pty"))).map_err(io_err)?;
+            writer.write_event(Event::End(BytesEnd::new("Dbtr"))).map_err(io_err)?;
+            if !cp_iban.is_empty() {
+                writer.write_event(Event::Start(BytesStart::new("DbtrAcct"))).map_err(io_err)?;
+                writer.write_event(Event::Start(BytesStart::new("Id"))).map_err(io_err)?;
+                write_text_elem(writer, "IBAN", &cp_iban)?;
+                writer.write_event(Event::End(BytesEnd::new("Id"))).map_err(io_err)?;
+                writer.write_event(Event::End(BytesEnd::new("DbtrAcct"))).map_err(io_err)?;
+            }
+        }
+        writer.write_event(Event::End(BytesEnd::new("RltdPties"))).map_err(io_err)?;
+    }
+
+    let purpose = tx.purpose().unwrap_or_else(|| tx.details.clone());
+    if !purpose.is_empty() {
+        writer.write_event(Event::Start(BytesStart::new("RmtInf"))).map_err(io_err)?;
+        write_text_elem(writer, "Ustrd", &purpose)?;
+        writer.write_event(Event::End(BytesEnd::new("RmtInf"))).map_err(io_err)?;
+    }
+
+    writer.write_event(Event::End(BytesEnd::new("TxDtls"))).map_err(io_err)?;
+    writer.write_event(Event::End(BytesEnd::new("NtryDtls"))).map_err(io_err)?;
+    writer.write_event(Event::End(BytesEnd::new("Ntry"))).map_err(io_err)?;
+    Ok(())
+}
+
+fn write_text_elem<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    name: &str,
+    text: &str,
+) -> CResult<()> {
+    writer.create_element(name).write_text_content(BytesText::new(text)).map(|_| ()).map_err(io_err)
+}
+
+fn write_amt_elem<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    start: BytesStart<'_>,
+    text: &str,
+) -> CResult<()> {
+    writer.write_event(Event::Start(start)).map_err(io_err)?;
+    writer.write_event(Event::Text(BytesText::new(text))).map_err(io_err)?;
+    writer.write_event(Event::End(BytesEnd::new("Amt"))).map_err(io_err)?;
+    Ok(())
 }

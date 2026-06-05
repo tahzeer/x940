@@ -2,7 +2,7 @@
 
 use pyo3::prelude::*;
 
-use x940rs::{parse_mt940, to_camt053, to_csv, to_json, DecoderChain};
+use x940rs::{amount_to_f64, parse_mt940, to_camt053, to_csv, to_json, DecoderChain};
 
 /// A parsed MT940 transaction exposed to Python.
 #[pyclass]
@@ -39,12 +39,12 @@ impl Transaction {
 
     #[getter]
     fn amount(&self) -> f64 {
-        let s = if self.debit_credit == "D" || self.debit_credit == "RC" {
+        let signed = if self.debit_credit == "D" || self.debit_credit == "RC" {
             -self.amount
         } else {
             self.amount
         };
-        s.to_string().parse().unwrap_or(0.0)
+        amount_to_f64(&signed)
     }
 
     // FIXME: return Decimal, but for now...
@@ -94,49 +94,26 @@ impl Transaction {
 
     #[getter]
     fn counterparty(&self) -> String {
-        match &self.structured_details {
-            Some(sd) => {
-                if let Some(n) = sd.get("32") {
-                    if let Some(c) = sd.get("33") {
-                        return format!("{} {}", n, c);
-                    }
-                    return n.clone();
-                }
-                if let Some(n) = sd.get("27") {
-                    return n.clone();
-                }
-                sd.get("NAME").cloned().unwrap_or_default()
-            }
-            None => String::new(),
-        }
+        self.structured_details
+            .as_ref()
+            .and_then(x940rs::Transaction::resolve_counterparty)
+            .unwrap_or_default()
     }
 
     #[getter]
     fn counter_iban(&self) -> String {
-        match &self.structured_details {
-            Some(sd) => sd
-                .get("31")
-                .or_else(|| sd.get("30"))
-                .or_else(|| sd.get("IBAN"))
-                .cloned()
-                .unwrap_or_default(),
-            None => String::new(),
-        }
+        self.structured_details
+            .as_ref()
+            .and_then(x940rs::Transaction::resolve_counter_iban)
+            .unwrap_or_default()
     }
 
     #[getter]
     fn purpose(&self) -> String {
-        match &self.structured_details {
-            Some(sd) => {
-                let lines: Vec<String> =
-                    (20..=29).filter_map(|i| sd.get(&i.to_string())).cloned().collect();
-                if !lines.is_empty() {
-                    return lines.join(" ");
-                }
-                sd.get("REMI").or_else(|| sd.get("EREF")).cloned().unwrap_or_default()
-            }
-            None => self.details.clone(),
-        }
+        self.structured_details
+            .as_ref()
+            .and_then(x940rs::Transaction::resolve_purpose)
+            .unwrap_or_else(|| self.details.clone())
     }
 }
 
@@ -191,18 +168,12 @@ impl MT940 {
 
     #[getter]
     fn opening_balance(&self) -> f64 {
-        self.statements
-            .first()
-            .map(|s| s.opening_balance.amount.to_string().parse().unwrap_or(0.0))
-            .unwrap_or(0.0)
+        self.statements.first().map(|s| amount_to_f64(&s.opening_balance.amount)).unwrap_or(0.0)
     }
 
     #[getter]
     fn closing_balance(&self) -> f64 {
-        self.statements
-            .first()
-            .map(|s| s.closing_balance.amount.to_string().parse().unwrap_or(0.0))
-            .unwrap_or(0.0)
+        self.statements.first().map(|s| amount_to_f64(&s.closing_balance.amount)).unwrap_or(0.0)
     }
 
     #[getter]
@@ -216,7 +187,7 @@ impl MT940 {
             .first()
             .map(|s| &s.transactions)
             .into_iter()
-            .flat_map(|txns| txns)
+            .flatten()
             .map(|tx| Transaction {
                 value_date: tx.value_date,
                 entry_date: tx.entry_date,

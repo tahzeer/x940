@@ -35,14 +35,11 @@ pub mod parser;
 pub mod serializers;
 pub mod statement;
 
-mod amount_utils;
-mod date_utils;
-
 pub use self::decoders::DecoderChain;
 pub use self::error::{ParseError, Result};
 pub use self::models::{Balance, DebitOrCredit, StatementNumber, Transaction};
 pub use self::parser::parse_mt940;
-pub use self::serializers::{to_camt053, to_csv, to_json};
+pub use self::serializers::{amount_to_f64, to_camt053, to_csv, to_json};
 pub use self::statement::Statement;
 
 #[cfg(test)]

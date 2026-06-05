@@ -316,6 +316,8 @@ fn statement_currency_returns_opening_balance_currency() {
         forward_available: None,
         transactions: vec![],
         info_to_owner: None,
+        has_opening_balance: true,
+        has_closing_balance: true,
     };
 
     assert_eq!(stmt.currency(), "EUR");

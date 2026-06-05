@@ -124,8 +124,6 @@ static TAG61_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 fn parse_transaction(value: &str) -> std::result::Result<Transaction, ParseError> {
-    // Split at first \n to separate main :61: value from supplementary details.
-    // Supplementary details ([34x]) appear on continuation lines per SWIFT spec.
     let (main_value, supplementary) = if let Some(nl) = value.find('\n') {
         let supp = value[nl + 1..].trim().to_string();
         (&value[..nl], if supp.is_empty() { None } else { Some(supp) })
@@ -198,12 +196,10 @@ fn tokenize_lines(input: &str) -> Vec<TagLine> {
     for line in raw_lines {
         let trimmed = line.trim_end_matches('\r');
 
-        // Check if this line starts a new tag
         if let Some(stripped) = trimmed.strip_prefix(':') {
             if let Some(colon_idx) = stripped.find(':') {
                 let tag = format!(":{}:", &stripped[..colon_idx]);
 
-                // Push previous tag if any
                 if !current_tag.is_empty() {
                     lines.push(TagLine {
                         tag: std::mem::take(&mut current_tag),
@@ -217,9 +213,6 @@ fn tokenize_lines(input: &str) -> Vec<TagLine> {
             }
         }
 
-        // Continuation line: belongs to previous tag.
-        // :86: strips newline with no space (no-space rule).
-        // :61: inserts newline to separate supplementary details.
         if !current_tag.is_empty() {
             if current_tag == ":61:" {
                 current_value.push('\n');
@@ -228,7 +221,6 @@ fn tokenize_lines(input: &str) -> Vec<TagLine> {
         }
     }
 
-    // Push final tag
     if !current_tag.is_empty() {
         lines.push(TagLine {
             tag: current_tag,
@@ -252,13 +244,13 @@ fn validate_statement(stmt: &Statement) -> Result<()> {
             context: stmt.transaction_reference.clone(),
         });
     }
-    if stmt.opening_balance.amount.is_zero() {
+    if !stmt.has_opening_balance {
         return Err(ParseError::MissingTag {
             tag: ":60F:",
             context: stmt.transaction_reference.clone(),
         });
     }
-    if stmt.closing_balance.amount.is_zero() {
+    if !stmt.has_closing_balance {
         return Err(ParseError::MissingTag {
             tag: ":62F:",
             context: stmt.transaction_reference.clone(),
@@ -267,7 +259,130 @@ fn validate_statement(stmt: &Statement) -> Result<()> {
     Ok(())
 }
 
-// FSM parser
+fn finalize_statement(
+    current: &mut Option<Statement>,
+    statements: &mut Vec<Statement>,
+) -> Result<()> {
+    if let Some(stmt) = current.take() {
+        validate_statement(&stmt)?;
+        statements.push(stmt);
+    }
+    Ok(())
+}
+
+// ParserState — bundles all FSM mutable state into one struct so handlers
+// have a single &mut parameter, making them independently testable.
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum State {
+    Start,
+    Header,
+    Body,
+    Footer,
+}
+
+pub(crate) struct ParserState {
+    pub current: Option<Statement>,
+    pub transactions: Vec<Transaction>,
+    pub current_tx: Option<Transaction>,
+    pub state: State,
+}
+
+impl Default for ParserState {
+    fn default() -> Self {
+        ParserState {
+            current: None,
+            transactions: Vec::new(),
+            current_tx: None,
+            state: State::Start,
+        }
+    }
+}
+
+// FSM state handlers
+
+fn handle_header_tag(tag: &str, val: &str, ps: &mut ParserState) -> Result<()> {
+    match tag {
+        ":21:" => {
+            if let Some(ref mut s) = ps.current {
+                s.related_reference = Some(val.to_string());
+            }
+        }
+        ":25:" => {
+            if let Some(ref mut s) = ps.current {
+                s.account_identification = val.to_string();
+            }
+        }
+        ":28C:" => {
+            if let Some(ref mut s) = ps.current {
+                s.statement_number = parse_statement_number(val);
+            }
+        }
+        ":60F:" | ":60M:" => {
+            if let Some(ref mut s) = ps.current {
+                s.set_opening_balance(parse_balance(val, tag == ":60M:")?);
+            }
+            if let Some(tx) = ps.current_tx.take() {
+                ps.transactions.push(tx);
+            }
+            ps.state = State::Body;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_body_tag(tag: &str, val: &str, chain: &DecoderChain, ps: &mut ParserState) -> Result<()> {
+    match tag {
+        ":61:" => {
+            if let Some(tx) = ps.current_tx.take() {
+                ps.transactions.push(tx);
+            }
+            ps.current_tx = Some(parse_transaction(val)?);
+        }
+        ":86:" => {
+            let sd = chain.decode(val);
+            if let Some(tx) = ps.current_tx.as_mut() {
+                tx.details = val.to_string();
+                tx.structured_details = Some(sd);
+            }
+        }
+        ":62F:" | ":62M:" => {
+            if let Some(tx) = ps.current_tx.take() {
+                ps.transactions.push(tx);
+            }
+            if let Some(ref mut s) = ps.current {
+                s.set_closing_balance(parse_balance(val, tag == ":62M:")?);
+                s.transactions = std::mem::take(&mut ps.transactions);
+            }
+            ps.state = State::Footer;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_footer_tag(tag: &str, val: &str, ps: &mut ParserState) -> Result<()> {
+    match tag {
+        ":64:" => {
+            if let Some(ref mut s) = ps.current {
+                s.closing_available = Some(parse_balance(val, false)?);
+            }
+        }
+        ":65:" => {
+            if let Some(ref mut s) = ps.current {
+                s.forward_available = Some(parse_balance(val, false)?);
+            }
+        }
+        ":86:" => {
+            if let Some(ref mut s) = ps.current {
+                s.info_to_owner = Some(val.to_string());
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
 
 pub fn parse_mt940(input: &str, chain: &DecoderChain) -> Result<Vec<Statement>> {
     let tag_lines = tokenize_lines(input);
@@ -276,192 +391,44 @@ pub fn parse_mt940(input: &str, chain: &DecoderChain) -> Result<Vec<Statement>> 
         return Err(ParseError::EmptyInput);
     }
 
-    #[derive(PartialEq)]
-    enum State {
-        Start,
-        Header,
-        Body,
-        Footer,
-    }
-
-    let mut state = State::Start;
+    let mut ps = ParserState::default();
     let mut statements: Vec<Statement> = Vec::new();
-    let mut current: Option<Statement> = None;
-    let mut transactions: Vec<Transaction> = Vec::new();
-    let mut current_tx: Option<Transaction> = None;
-
-    let push_statement = |s: &mut Option<Statement>, stmts: &mut Vec<Statement>| -> Result<()> {
-        if let Some(stmt) = s.take() {
-            validate_statement(&stmt)?;
-            stmts.push(stmt);
-        }
-        Ok(())
-    };
 
     for tl in &tag_lines {
         let tag = tl.tag.as_str();
         let val = tl.value.as_str();
 
-        match state {
+        match ps.state {
             State::Start => {
                 if tag == ":20:" {
-                    current = Some(Statement {
-                        transaction_reference: val.to_string(),
-                        related_reference: None,
-                        account_identification: String::new(),
-                        statement_number: StatementNumber {
-                            statement: String::new(),
-                            sequence: None,
-                        },
-                        opening_balance: Balance {
-                            is_intermediate: false,
-                            debit_credit: DebitOrCredit::Credit,
-                            date: NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
-                            currency: String::new(),
-                            amount: Decimal::new(0, 0),
-                        },
-                        closing_balance: Balance {
-                            is_intermediate: false,
-                            debit_credit: DebitOrCredit::Credit,
-                            date: NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
-                            currency: String::new(),
-                            amount: Decimal::new(0, 0),
-                        },
-                        closing_available: None,
-                        forward_available: None,
-                        transactions: Vec::new(),
-                        info_to_owner: None,
-                    });
-                    transactions = Vec::new();
-                    state = State::Header;
+                    ps.current = Some(Statement::new(val.to_string()));
+                    ps.transactions = Vec::new();
+                    ps.state = State::Header;
                 }
             }
 
             State::Header => {
-                match tag {
-                    ":21:" => {
-                        if let Some(ref mut s) = current {
-                            s.related_reference = Some(val.to_string());
-                        }
-                    }
-                    ":25:" => {
-                        if let Some(ref mut s) = current {
-                            s.account_identification = val.to_string();
-                        }
-                    }
-                    ":28C:" => {
-                        if let Some(ref mut s) = current {
-                            s.statement_number = parse_statement_number(val);
-                        }
-                    }
-                    ":60F:" | ":60M:" => {
-                        if let Some(ref mut s) = current {
-                            s.opening_balance = parse_balance(val, tag == ":60M:")?;
-                        }
-                        // Finalize any pending transaction before moving to body
-                        if let Some(tx) = current_tx.take() {
-                            transactions.push(tx);
-                        }
-                        state = State::Body;
-                    }
-                    _ => {}
-                }
+                handle_header_tag(tag, val, &mut ps)?;
             }
 
             State::Body => {
-                match tag {
-                    ":61:" => {
-                        // Finalize previous transaction
-                        if let Some(tx) = current_tx.take() {
-                            transactions.push(tx);
-                        }
-                        let tx = parse_transaction(val)?;
-                        // Store parsed structured details immediately for :86: to use
-                        current_tx = Some(tx);
-                    }
-                    ":86:" => {
-                        // Resolve structured details through the decoder chain
-                        let sd = chain.decode(val);
-
-                        if let Some(tx) = current_tx.as_mut() {
-                            tx.details = val.to_string();
-                            tx.structured_details = Some(sd);
-                        }
-                    }
-                    ":62F:" | ":62M:" => {
-                        // Finalize last transaction
-                        if let Some(tx) = current_tx.take() {
-                            transactions.push(tx);
-                        }
-                        if let Some(ref mut s) = current {
-                            s.closing_balance = parse_balance(val, tag == ":62M:")?;
-                            s.transactions = std::mem::take(&mut transactions);
-                        }
-                        state = State::Footer;
-                    }
-                    _ => {}
-                }
+                handle_body_tag(tag, val, chain, &mut ps)?;
             }
 
             State::Footer => {
-                match tag {
-                    ":64:" => {
-                        if let Some(ref mut s) = current {
-                            s.closing_available = Some(parse_balance(val, false)?);
-                        }
-                    }
-                    ":65:" => {
-                        if let Some(ref mut s) = current {
-                            s.forward_available = Some(parse_balance(val, false)?);
-                        }
-                    }
-                    ":86:" => {
-                        // Standalone info to owner in footer
-                        if let Some(ref mut s) = current {
-                            s.info_to_owner = Some(val.to_string());
-                        }
-                    }
-                    ":20:" => {
-                        push_statement(&mut current, &mut statements)?;
-                        // Start new statement
-                        current = Some(Statement {
-                            transaction_reference: val.to_string(),
-                            related_reference: None,
-                            account_identification: String::new(),
-                            statement_number: StatementNumber {
-                                statement: String::new(),
-                                sequence: None,
-                            },
-                            opening_balance: Balance {
-                                is_intermediate: false,
-                                debit_credit: DebitOrCredit::Credit,
-                                date: NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
-                                currency: String::new(),
-                                amount: Decimal::new(0, 0),
-                            },
-                            closing_balance: Balance {
-                                is_intermediate: false,
-                                debit_credit: DebitOrCredit::Credit,
-                                date: NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
-                                currency: String::new(),
-                                amount: Decimal::new(0, 0),
-                            },
-                            closing_available: None,
-                            forward_available: None,
-                            transactions: Vec::new(),
-                            info_to_owner: None,
-                        });
-                        transactions = Vec::new();
-                        state = State::Header;
-                    }
-                    _ => {}
+                if tag == ":20:" {
+                    finalize_statement(&mut ps.current, &mut statements)?;
+                    ps.current = Some(Statement::new(val.to_string()));
+                    ps.transactions = Vec::new();
+                    ps.state = State::Header;
+                } else {
+                    handle_footer_tag(tag, val, &mut ps)?;
                 }
             }
         }
     }
 
-    // Push final statement
-    push_statement(&mut current, &mut statements)?;
+    finalize_statement(&mut ps.current, &mut statements)?;
 
     if statements.is_empty() {
         return Err(ParseError::EmptyInput);
@@ -508,17 +475,111 @@ mod tests {
 
     #[test]
     fn parses_continuation_lines() {
-        let raw =
-            std::fs::read_to_string("tests/data/swift/continuation_payload.sta").unwrap();
+        let raw = std::fs::read_to_string("tests/data/swift/continuation_payload.sta").unwrap();
         let chain = DecoderChain::auto();
         let stmts = parse_mt940(&raw, &chain).unwrap();
         let s = &stmts[0];
         assert_eq!(s.transactions.len(), 2);
-        // First transaction has supplementary details on continuation line
         let tx = &s.transactions[0];
         assert_eq!(tx.transaction_type, "NTRF");
         assert!(tx.supplementary.is_some());
         assert!(tx.supplementary.as_ref().unwrap().contains("SUPPLEMENTARY DETAILS"));
         assert!(tx.supplementary.as_ref().unwrap().contains("FROM THE BANK"));
+    }
+
+    // ParserState / handler unit tests
+
+    #[test]
+    fn handle_header_tag_parses_opening_balance() {
+        let mut ps = ParserState {
+            current: Some(Statement::new("T".into())),
+            ..ParserState::default()
+        };
+        handle_header_tag(":60F:", "C240101EUR1500,00", &mut ps).unwrap();
+        let s = ps.current.as_ref().unwrap();
+        assert!(s.has_opening_balance);
+        assert_eq!(s.opening_balance.amount.to_string(), "1500.00");
+        assert_eq!(ps.state, State::Body);
+    }
+
+    #[test]
+    fn handle_header_tag_parses_account_and_statement_number() {
+        let mut ps = ParserState {
+            current: Some(Statement::new("T".into())),
+            ..ParserState::default()
+        };
+        handle_header_tag(":25:", "DE1234567890", &mut ps).unwrap();
+        handle_header_tag(":28C:", "5/1", &mut ps).unwrap();
+        let s = ps.current.as_ref().unwrap();
+        assert_eq!(s.account_identification, "DE1234567890");
+        assert_eq!(s.statement_number.statement, "5");
+        assert_eq!(s.statement_number.sequence.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn handle_body_tag_parses_transaction() {
+        let chain = DecoderChain::auto();
+        let mut ps = ParserState {
+            current: Some(Statement::new("T".into())),
+            ..ParserState::default()
+        };
+        handle_body_tag(":61:", "2401012401D100,00NTRF//REF001", &chain, &mut ps).unwrap();
+        let tx = ps.current_tx.as_ref().unwrap();
+        assert_eq!(tx.amount.to_string(), "100.00");
+        assert_eq!(tx.transaction_type, "NTRF");
+        assert_eq!(tx.bank_reference.as_deref(), Some("REF001"));
+    }
+
+    #[test]
+    fn handle_body_tag_parses_closing_balance() {
+        let chain = DecoderChain::auto();
+        let mut ps = ParserState {
+            current: Some(Statement::new("T".into())),
+            ..ParserState::default()
+        };
+        handle_body_tag(":62F:", "C240101EUR900,00", &chain, &mut ps).unwrap();
+        let s = ps.current.as_ref().unwrap();
+        assert!(s.has_closing_balance);
+        assert_eq!(s.closing_balance.amount.to_string(), "900.00");
+        assert_eq!(ps.state, State::Footer);
+    }
+
+    #[test]
+    fn handle_footer_tag_parses_available_balances() {
+        let mut ps = ParserState {
+            current: Some(Statement::new("T".into())),
+            ..ParserState::default()
+        };
+        handle_footer_tag(":64:", "C240101EUR800,00", &mut ps).unwrap();
+        handle_footer_tag(":65:", "C240131EUR700,00", &mut ps).unwrap();
+        let s = ps.current.as_ref().unwrap();
+        assert_eq!(s.closing_available.as_ref().unwrap().amount.to_string(), "800.00");
+        assert_eq!(s.forward_available.as_ref().unwrap().amount.to_string(), "700.00");
+    }
+
+    #[test]
+    fn validate_statement_rejects_missing_opening_balance() {
+        let mut s = Statement::new("T".into());
+        s.account_identification = "A".into();
+        s.statement_number = StatementNumber {
+            statement: "1".into(),
+            sequence: None,
+        };
+        // has_opening_balance is false by default
+        assert!(validate_statement(&s).is_err());
+    }
+
+    #[test]
+    fn validate_statement_accepts_zero_balance() {
+        let mut s = Statement::new("T".into());
+        s.account_identification = "A".into();
+        s.statement_number = StatementNumber {
+            statement: "1".into(),
+            sequence: None,
+        };
+        s.set_opening_balance(Balance::default()); // zero amount, but tag was parsed
+        s.set_closing_balance(Balance::default());
+        // Should pass even though amounts are zero
+        assert!(validate_statement(&s).is_ok());
     }
 }

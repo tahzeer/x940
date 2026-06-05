@@ -5,7 +5,7 @@ use crate::error::ParseError;
 use crate::models::Transaction;
 use crate::statement::Statement;
 
-use super::{date_iso, date_string, decimal_to_f64};
+use super::{amount_to_f64, date_iso, date_string};
 
 #[derive(Serialize)]
 #[allow(non_snake_case)]
@@ -69,7 +69,7 @@ fn txn_to_json(tx: &Transaction, currency: &str) -> JsonTxn {
         date: date_string(&tx.value_date),
         entryDate: tx.entry_date.as_ref().map(date_string),
         fundsCode: tx.funds_code.clone(),
-        amount: decimal_to_f64(&signed),
+        amount: amount_to_f64(&signed),
         isReversal: tx.debit_credit.is_reversal(),
         transactionType: tx.transaction_type.clone(),
         reference: tx.customer_reference.clone(),
@@ -110,18 +110,18 @@ pub fn to_json(statements: &[Statement]) -> crate::error::Result<String> {
                     .map(|b| date_iso(&b.date))
                     .unwrap_or_else(|| date_iso(&closing_date)),
                 currency: s.opening_balance.currency.clone(),
-                openingBalance: decimal_to_f64(&s.opening_balance.amount),
-                closingBalance: decimal_to_f64(&s.closing_balance.amount),
+                openingBalance: amount_to_f64(&s.opening_balance.amount),
+                closingBalance: amount_to_f64(&s.closing_balance.amount),
                 closingAvailableBalance: s
                     .closing_available
                     .as_ref()
-                    .map(|b| decimal_to_f64(&b.amount))
-                    .unwrap_or_else(|| decimal_to_f64(&s.closing_balance.amount)),
+                    .map(|b| amount_to_f64(&b.amount))
+                    .unwrap_or_else(|| amount_to_f64(&s.closing_balance.amount)),
                 forwardAvailableBalance: s
                     .forward_available
                     .as_ref()
-                    .map(|b| decimal_to_f64(&b.amount))
-                    .unwrap_or_else(|| decimal_to_f64(&s.closing_balance.amount)),
+                    .map(|b| amount_to_f64(&b.amount))
+                    .unwrap_or_else(|| amount_to_f64(&s.closing_balance.amount)),
                 informationToAccountOwner: s.info_to_owner.clone().unwrap_or_default(),
                 transactions: s
                     .transactions

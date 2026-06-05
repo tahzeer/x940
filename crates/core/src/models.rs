@@ -79,6 +79,18 @@ pub struct Balance {
     pub amount: Decimal,
 }
 
+impl Default for Balance {
+    fn default() -> Self {
+        Balance {
+            is_intermediate: false,
+            debit_credit: DebitOrCredit::Credit,
+            date: NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
+            currency: String::new(),
+            amount: Decimal::new(0, 0),
+        }
+    }
+}
+
 /// Parsed representation of the `:28C:` Statement Number / Sequence Number tag.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatementNumber {
@@ -140,16 +152,65 @@ impl Transaction {
         }
     }
 
-    /// Returns the counterparty name from structured details.
+    /// Resolve the counterparty name from structured details.
     ///
     /// Resolution order:
-    ///   1. SWIFT structured: `"NAME"` key
-    ///   2. German GVC: `"32"` key + `"33"` key (space-joined)
-    ///   3. Angular: `"27"` key
-    ///   4. Falls back to empty string
-    pub fn counterparty(&self) -> Option<&str> {
-        self.structured_details.as_ref().and_then(|sd| {
-            sd.get("NAME").or_else(|| sd.get("32")).or_else(|| sd.get("27")).map(|s| s.as_str())
-        })
+    ///   1. German GVC: `"32"` + `"33"` (space-joined)
+    ///   2. Angular: `"27"`
+    ///   3. SWIFT structured: `"NAME"`
+    ///
+    /// This is the canonical resolution logic, used by all serializers
+    /// and bindings. Prefer this over reimplementing the resolution chain.
+    pub fn resolve_counterparty(sd: &HashMap<String, String>) -> Option<String> {
+        if let Some(name) = sd.get("32") {
+            if let Some(cont) = sd.get("33") {
+                return Some(format!("{} {}", name, cont));
+            }
+            return Some(name.clone());
+        }
+        if let Some(name) = sd.get("27") {
+            return Some(name.clone());
+        }
+        sd.get("NAME").cloned()
+    }
+
+    /// Resolve the counterparty IBAN/account from structured details.
+    ///
+    /// Resolution order:
+    ///   1. German GVC: `"31"` (Kontonummer)
+    ///   2. Angular: `"30"`
+    ///   3. SWIFT structured: `"IBAN"`
+    pub fn resolve_counter_iban(sd: &HashMap<String, String>) -> Option<String> {
+        sd.get("31").or_else(|| sd.get("30")).or_else(|| sd.get("IBAN")).cloned()
+    }
+
+    /// Resolve the purpose/remittance text from structured details.
+    ///
+    /// Resolution order:
+    ///   1. German GVC: `"20"` through `"29"` joined with spaces
+    ///   2. SWIFT structured: `"REMI"`
+    ///   3. SWIFT structured: `"EREF"`
+    pub fn resolve_purpose(sd: &HashMap<String, String>) -> Option<String> {
+        let lines: Vec<String> =
+            (20..=29).filter_map(|i| sd.get(&i.to_string())).cloned().collect();
+        if !lines.is_empty() {
+            return Some(lines.join(" "));
+        }
+        sd.get("REMI").or_else(|| sd.get("EREF")).cloned()
+    }
+
+    /// Returns the counterparty name from structured details.
+    pub fn counterparty(&self) -> Option<String> {
+        self.structured_details.as_ref().and_then(Self::resolve_counterparty)
+    }
+
+    /// Returns the counterparty IBAN/account from structured details.
+    pub fn counter_iban(&self) -> Option<String> {
+        self.structured_details.as_ref().and_then(Self::resolve_counter_iban)
+    }
+
+    /// Returns the purpose/remittance text from structured details.
+    pub fn purpose(&self) -> Option<String> {
+        self.structured_details.as_ref().and_then(Self::resolve_purpose)
     }
 }

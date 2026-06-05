@@ -1,14 +1,14 @@
 # x940
 
-High-performance MT940 bank statement parser. Converts legacy SWIFT MT940 files
-to JSON, CSV, and ISO 20022 camt.053 XML.
-
-Built in Rust with native Python, Node.js, and CLI bindings.
-
 > **x940 is under active development** and may not yet be
 > production-ready. APIs, output formats, and behavior may change between
 > releases as the parser evolves to handle more MT940 dialects, edge cases,
 > and SWIFT variations. Feedback, bug reports, and contributions are welcome.
+
+High-performance MT940 bank statement parser. Converts legacy SWIFT MT940 files
+to JSON, CSV, and ISO 20022 camt.053 XML.
+
+Built in Rust with native Python, Node.js, and CLI bindings.
 
 ## Installation
 

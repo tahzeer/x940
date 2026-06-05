@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::error::ParseError;
 use crate::statement::Statement;
 
-use super::{csv_escape, date_string, resolve_counter_iban, resolve_counterparty, resolve_purpose};
+use super::{csv_escape, date_string};
 
 pub fn to_csv(statements: &[Statement]) -> crate::error::Result<String> {
     let mut buf: Vec<u8> = Vec::new();
@@ -28,12 +28,9 @@ pub fn to_csv(statements: &[Statement]) -> crate::error::Result<String> {
             let signed = tx.signed_amount();
             let amount_str = format!("{:.2}", signed);
 
-            let (cp, ciban, purpose) = match &tx.structured_details {
-                Some(sd) => {
-                    (resolve_counterparty(sd), resolve_counter_iban(sd), resolve_purpose(sd))
-                }
-                None => (String::new(), String::new(), tx.details.clone()),
-            };
+            let cp = tx.counterparty().unwrap_or_default();
+            let ciban = tx.counter_iban().unwrap_or_default();
+            let purpose = tx.purpose().unwrap_or_else(|| tx.details.clone());
 
             let entry_str = tx
                 .entry_date

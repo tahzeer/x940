@@ -5,10 +5,7 @@ use std::path::PathBuf;
 const PAYLOAD: &str = ":20:TEST\r\n:25:ACCT\r\n:28C:1/1\r\n:60F:C240101EUR1000,00\r\n:61:2401012401D100,00NTRF//REF\r\n:86:test debit\r\n:62F:C240101EUR900,00\r\n";
 
 fn tmp(name: &str) -> String {
-    std::env::temp_dir()
-        .join(format!("x940_cli_{}", name))
-        .to_string_lossy()
-        .to_string()
+    std::env::temp_dir().join(format!("x940_cli_{}", name)).to_string_lossy().to_string()
 }
 
 #[test]
@@ -139,11 +136,7 @@ fn transform_missing_format_errors() {
     let input = tmp("noformat.sta");
     std::fs::write(&input, PAYLOAD).unwrap();
 
-    Command::cargo_bin("x940")
-        .unwrap()
-        .args(["transform", &input])
-        .assert()
-        .failure();
+    Command::cargo_bin("x940").unwrap().args(["transform", &input]).assert().failure();
 
     let _ = std::fs::remove_file(&input);
 }
