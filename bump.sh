@@ -13,8 +13,10 @@ echo "Bumping to $V"
 sed -i "s/^version = \".*\"/version = \"$V\"/" Cargo.toml
 sed -i "s/^version = \".*\"/version = \"$V\"/" crates/python/pyproject.toml
 sed -i "s/\"version\": \".*\"/\"version\": \"$V\"/" crates/node/package.json
+sed -i "s/\"version\": \".*\"/\"version\": \"$V\"/" crates/wasm/package.json
 
 echo "Cargo.toml:       $(grep '^version' Cargo.toml | head -1)"
 echo "pyproject.toml:   $(grep '^version' crates/python/pyproject.toml | head -1)"
 echo "package.json:     $(grep '"version"' crates/node/package.json | head -1)"
+echo "wasm/package.json: $(grep '"version"' crates/wasm/package.json | head -1)"
 echo "Done."

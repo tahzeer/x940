@@ -1,0 +1,53 @@
+name: test-wasm
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'crates/core/**'
+      - 'crates/wasm/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test-wasm.yml'
+  pull_request:
+    branches: ["**"]
+    paths:
+      - 'crates/core/**'
+      - 'crates/wasm/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test-wasm.yml'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: ["20", "22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-${{ matrix.node-version }}-cargo-wasm-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Run JS integration tests
+        run: npm test
+        working-directory: crates/wasm

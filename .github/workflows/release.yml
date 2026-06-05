@@ -21,6 +21,10 @@ on:
         description: "Publish to npm"
         type: boolean
         default: true
+      publish_npm_wasm:
+        description: "Publish WASM to npm"
+        type: boolean
+        default: true
 
 jobs:
   verify:
@@ -124,5 +128,51 @@ jobs:
       - name: Publish to npm
         run: npm publish --access public
         working-directory: crates/node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  build-wasm:
+    needs: verify
+    if: ${{ github.event_name == 'push' || inputs.publish_npm_wasm }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build WASM (all targets)
+        run: npm run build
+        working-directory: crates/wasm
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: crates/wasm/pkg/
+
+  publish-npm-wasm:
+    needs: build-wasm
+    if: ${{ github.event_name == 'push' || inputs.publish_npm_wasm }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: crates/wasm/pkg/
+
+      - name: Publish WASM to npm
+        run: npm publish --access public
+        working-directory: crates/wasm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

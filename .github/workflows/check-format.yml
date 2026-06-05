@@ -40,8 +40,9 @@ jobs:
           cargo_ver=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
           py_ver=$(grep '^version' crates/python/pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
           node_ver=$(grep '"version"' crates/node/package.json | head -1 | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/')
-          if [ "$cargo_ver" != "$py_ver" ] || [ "$cargo_ver" != "$node_ver" ]; then
-            echo "Version mismatch: Cargo=$cargo_ver Python=$py_ver Node=$node_ver"
+          wasm_ver=$(grep '"version"' crates/wasm/package.json | head -1 | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/')
+          if [ "$cargo_ver" != "$py_ver" ] || [ "$cargo_ver" != "$node_ver" ] || [ "$cargo_ver" != "$wasm_ver" ]; then
+            echo "Version mismatch: Cargo=$cargo_ver Python=$py_ver Node=$node_ver Wasm=$wasm_ver"
             exit 1
           fi
           echo "All versions match: $cargo_ver"

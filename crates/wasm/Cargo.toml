@@ -1,0 +1,18 @@
+[package]
+name = "x940wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "x940 WASM binding: MT940 parser for browser/Deno/Bun via wasm-bindgen"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+x940rs = { path = "../core" }
+wasm-bindgen.workspace = true
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true
