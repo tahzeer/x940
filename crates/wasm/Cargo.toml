@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "x940 WASM binding: MT940 parser for browser/Deno/Bun via wasm-bindgen"
+description = "x940 WASM binding: MT940 parser for browser/deno/bun via wasm-bindgen"
 
 [lib]
 crate-type = ["cdylib"]
